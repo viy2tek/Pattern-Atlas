@@ -1,60 +1,36 @@
 # Pattern Atlas
 
-Pattern Atlas is a simple MIDI exporter for turning one MIDI file into organized
-stems.
+Offline Windows MIDI exporter for splitting one Standard MIDI File into organized stems.
 
-<p align="center">
-  <img src="docs/pattern-atlas-interface.png" alt="Pattern Atlas interface" width="900">
-</p>
+![Pattern Atlas interface](docs/pattern-atlas-interface.png)
 
-## What it does
+## Features
 
-- Splits `.mid` and `.midi` files into separate stems
-- Detects sources by track or MIDI channel
-- Preserves notes, timing, tempo, and MIDI metadata
-- Works offline on Windows
+- Split `.mid` and `.midi` files by track, MIDI channel, or automatically
+- Preserve notes, timing, tempo, and MIDI metadata
+- Export each detected source as a separate `.mid` file
+- Works offline
+- Does not render audio or open DAW project files
+
+## Usage
+
+1. Open Pattern Atlas.
+2. Browse for a MIDI file or drop one into the window.
+3. Choose an output folder and split mode.
+4. Click **Export MIDI Stems**.
 
 ## Split modes
 
-- **Automatic** chooses the most useful split for the file: by track when
-  multiple musical tracks are present, otherwise by MIDI channel.
-- **By track** creates one stem for each track that contains notes.
-- **By MIDI channel** creates one stem for each channel (and MIDI port) that
-  contains notes.
+- **Automatic** — chooses track or channel separation based on the file structure
+- **By Track** — creates one stem per MIDI track
+- **By MIDI Channel** — creates one stem per MIDI channel
 
 ## Download
 
-Download `Pattern Atlas.exe` from the repository's **Releases** page and open
-it. No command line is required.
+Download `Pattern Atlas.exe` from the **Releases** page.
 
-## How to use
-
-1. Open Pattern Atlas.
-2. Select **Browse…** or drop a MIDI file anywhere in the window.
-3. Choose an output folder.
-4. Click **Export MIDI Stems**.
-
-The exported files appear in the result list and are saved in the selected
-folder.
-
-## Example output
-
-```text
-01 - Piano.mid
-02 - Bass.mid
-03 - Pad.mid
-```
-
-## Command line (optional)
-
-For scripting or automation, install the project and run:
+## CLI
 
 ```powershell
-python -m pip install -e .
-midi-exporter song.mid -o output
+midi-exporter song.mid -o output --mode auto
 ```
-
-## Notes
-
-Pattern Atlas works with Standard MIDI files. It does not open proprietary DAW
-project files or render audio.
