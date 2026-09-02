@@ -3,6 +3,10 @@
 Pattern Atlas is a simple MIDI exporter for turning one MIDI file into organized
 stems.
 
+<p align="center">
+  <img src="docs/pattern-atlas-interface.png" alt="Pattern Atlas interface" width="900">
+</p>
+
 ## What it does
 
 - Splits `.mid` and `.midi` files into separate stems
