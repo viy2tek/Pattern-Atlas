@@ -31,7 +31,13 @@ from PySide6.QtWidgets import (
 )
 
 from ..application import MidiExportService
-from ..core.models import ExportResult, MidiExportError, MidiProjectAnalysis, SplitMode
+from ..core.models import (
+    ExportedStem,
+    ExportResult,
+    MidiExportError,
+    MidiProjectAnalysis,
+    SplitMode,
+)
 from .drop_zone import MIDI_SUFFIXES, DragOverlay, DropZone
 from .icons import IconLabel, svg_icon
 from .result_list import ResultList
@@ -44,12 +50,13 @@ class _ServiceWorker(QObject):
     """Execute one service operation without blocking the GUI event loop."""
 
     succeeded = Signal(object)
+    progressed = Signal(object)
     failed = Signal(str, object, bool)
     finished = Signal()
 
     def __init__(
         self,
-        operation: Callable[[], object],
+        operation: Callable[[Callable[[object], None]], object],
         error_message: str,
         clear_analysis_on_failure: bool,
     ) -> None:
@@ -62,7 +69,7 @@ class _ServiceWorker(QObject):
     def run(self) -> None:
         """Run the requested service operation and report its outcome."""
         try:
-            self.succeeded.emit(self._operation())
+            self.succeeded.emit(self._operation(self.progressed.emit))
         except MidiExportError as error:
             self.failed.emit(str(error), error, self._clear_analysis_on_failure)
         except Exception as error:  # noqa: BLE001  # pragma: no cover - GUI boundary
@@ -355,7 +362,7 @@ class MainWindow(QMainWindow):
 
         mode = self._selected_mode()
         self._start_worker(
-            lambda: self.service.analyze(path, mode),
+            lambda _progress: self.service.analyze(path, mode),
             self._analysis_loaded,
             "The MIDI file could not be analyzed. Please try another file.",
             clear_analysis_on_failure=True,
@@ -390,11 +397,15 @@ class MainWindow(QMainWindow):
         output_dir = Path(output_text)
         mode = self._selected_mode()
         self.status_label.setText("Exporting MIDI stems…")
+        self.result_list.clear()
         self._start_worker(
-            lambda: self.service.export(input_path, output_dir, mode),
+            lambda progress: self.service.export(
+                input_path, output_dir, mode, on_stem=progress
+            ),
             self._export_finished,
             "The MIDI stems could not be exported. Please try again.",
             clear_analysis_on_failure=False,
+            on_progress=self._export_progress,
         )
 
     def _analysis_loaded(self, result: object) -> None:
@@ -420,12 +431,20 @@ class MainWindow(QMainWindow):
             QMessageBox.Icon.Information,
         )
 
+    def _export_progress(self, stem: object) -> None:
+        """Show each stem immediately after its atomic commit."""
+        if not isinstance(stem, ExportedStem):
+            raise TypeError("Export worker reported an unexpected stem.")
+        self.result_list.add_exported_stem(stem)
+        self.status_label.setText(f"Exporting MIDI stems… ({self.result_list.count()})")
+
     def _start_worker(
         self,
-        operation: Callable[[], object],
+        operation: Callable[[Callable[[object], None]], object],
         on_success: Callable[[object], None],
         fallback_error: str,
         clear_analysis_on_failure: bool,
+        on_progress: Callable[[object], None] | None = None,
     ) -> None:
         self._is_busy = True
         self._update_controls()
@@ -435,6 +454,8 @@ class MainWindow(QMainWindow):
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.succeeded.connect(on_success)
+        if on_progress is not None:
+            worker.progressed.connect(on_progress, Qt.ConnectionType.QueuedConnection)
         worker.failed.connect(
             self.worker_failure_received, Qt.ConnectionType.QueuedConnection
         )
@@ -458,6 +479,7 @@ class MainWindow(QMainWindow):
             )
         else:  # pragma: no cover - signal contract guard
             logger.error("MIDI GUI operation failed: %s", error)
+        self.result_list.clear()
         if clear_analysis_on_failure:
             self.detected_label.setText("No MIDI sources detected")
             self._analysis = None
