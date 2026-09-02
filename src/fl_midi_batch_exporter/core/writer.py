@@ -1,11 +1,15 @@
 """Write timeline-preserving Type 1 MIDI stem files."""
 
-from collections.abc import Sequence
+import os
+import tempfile
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import mido
 
 from .models import MidiExportError, MidiProjectAnalysis, MidiSource, TimedMidiEvent
+
+OutputFileIdentity = tuple[int, int]
 
 
 def to_delta_messages(
@@ -25,7 +29,8 @@ def write_stem(
     analysis: MidiProjectAnalysis,
     source: MidiSource,
     events: Sequence[TimedMidiEvent],
-) -> None:
+    on_commit: Callable[[OutputFileIdentity], None] | None = None,
+) -> OutputFileIdentity:
     """Write one source as a two-track Type 1 MIDI file.
 
     The conductor track contains global events and the second track contains
@@ -41,9 +46,32 @@ def write_stem(
     midi.tracks.append(_track_with_end_of_track(source_events))
 
     output_path = Path(path)
+    descriptor: int | None = None
+    temporary_path: Path | None = None
+    identity: OutputFileIdentity | None = None
     try:
-        midi.save(output_path)
-    except (OSError, ValueError) as error:
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=output_path.parent,
+            prefix=f".{output_path.name}.",
+            suffix=".tmp",
+        )
+        temporary_path = Path(temporary_name)
+        os.close(descriptor)
+        descriptor = None
+        midi.save(temporary_path)
+        temporary_stat = temporary_path.stat()
+        identity = temporary_stat.st_dev, temporary_stat.st_ino
+        os.rename(temporary_path, output_path)
+        if on_commit is not None:
+            on_commit(identity)
+        return identity
+    except BaseException as error:
+        _close_descriptor_quietly(descriptor)
+        _remove_file_quietly(temporary_path)
+        if identity is not None:
+            remove_file_if_owned(output_path, identity)
+        if not isinstance(error, (OSError, ValueError)):
+            raise
         raise MidiExportError(
             f"Could not write MIDI stem '{source.name}' to '{output_path}'. "
             "Check that the output folder is writable and try again."
@@ -60,3 +88,33 @@ def _track_with_end_of_track(events: Sequence[TimedMidiEvent]) -> mido.MidiTrack
     )
     track.append(mido.MetaMessage("end_of_track", time=0))
     return track
+
+
+def _remove_file_quietly(path: Path | None) -> None:
+    """Best-effort cleanup that never masks the operation's original failure."""
+    if path is None:
+        return
+    try:
+        path.unlink(missing_ok=True)
+    except BaseException:  # noqa: BLE001 - cleanup must preserve the active failure
+        return
+
+
+def _close_descriptor_quietly(descriptor: int | None) -> None:
+    """Close a temporary descriptor while preserving an active exception."""
+    if descriptor is None:
+        return
+    try:
+        os.close(descriptor)
+    except BaseException:  # noqa: BLE001 - cleanup must preserve the active failure
+        return
+
+
+def remove_file_if_owned(path: Path, identity: OutputFileIdentity) -> None:
+    """Remove *path* only while it is still the file identified by *identity*."""
+    try:
+        current = path.stat()
+        if (current.st_dev, current.st_ino) == identity:
+            path.unlink()
+    except BaseException:  # noqa: BLE001 - rollback must preserve the active failure
+        return

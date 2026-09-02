@@ -36,6 +36,11 @@ def read_midi(path: Path) -> ReadMidiFile:
 
 def to_absolute_ticks(midi: mido.MidiFile) -> ReadMidiFile:
     """Convert a parsed Mido file to stable, absolute-tick event tuples."""
+    if midi.type == 2:
+        raise MidiExportError(
+            "MIDI Type 2 files contain independent timelines and are not supported. "
+            "Please convert the file to MIDI Type 0 or Type 1 first."
+        )
     tracks: list[tuple[TimedMidiEvent, ...]] = []
     for track_index, track in enumerate(midi.tracks):
         tick = 0

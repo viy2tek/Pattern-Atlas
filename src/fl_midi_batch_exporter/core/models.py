@@ -1,10 +1,10 @@
 """Immutable data models shared by the MIDI exporter core."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
-from typing import Mapping
 
 import mido
 

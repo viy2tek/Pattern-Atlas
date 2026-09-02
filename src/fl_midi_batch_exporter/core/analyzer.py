@@ -2,13 +2,9 @@
 
 from collections.abc import Iterable
 
+from .metadata import is_global_event
 from .models import MidiProjectAnalysis, MidiSource, SplitMode, TimedMidiEvent
 from .reader import ReadMidiFile
-
-
-_LOCAL_METADATA_TYPES = frozenset(
-    {"channel_prefix", "end_of_track", "instrument_name", "midi_port", "track_name"}
-)
 
 
 def analyze_midi(read: ReadMidiFile, mode: SplitMode = SplitMode.AUTO) -> MidiProjectAnalysis:
@@ -39,12 +35,19 @@ def resolve_strategy(mode: SplitMode, musical_tracks: tuple[int, ...]) -> SplitM
 
 def global_events(tracks: tuple[tuple[TimedMidiEvent, ...], ...]) -> tuple[TimedMidiEvent, ...]:
     """Return conductor metadata in deterministic timeline order."""
-    events = (
-        event
-        for track in tracks
-        for event in track
-        if event.message.is_meta and event.message.type not in _LOCAL_METADATA_TYPES
-    )
+    events: list[TimedMidiEvent] = []
+    for track in tracks:
+        is_conductor_track = not has_note_on(track)
+        events.extend(
+            event
+            for event in track
+            if is_global_event(event)
+            or (
+                is_conductor_track
+                and event.message.type != "end_of_track"
+                and (event.message.is_meta or event.message.type == "sysex")
+            )
+        )
     return tuple(sorted(events, key=event_sort_key))
 
 
@@ -108,14 +111,23 @@ def _channel_candidates(
 def _belongs_to_channel_source(event: TimedMidiEvent, port: int | None, channel: int) -> bool:
     if is_global_event(event):
         return False
+    if event.message.type == "end_of_track":
+        return False
     if event.message.type == "sysex":
         # SysEx has no channel.  It belongs to every channel stem sharing its
         # source track/port, which conservatively preserves port-scoped device
         # data instead of discarding it during a channel split.
         return event.port == port
+    if event.message.is_meta:
+        if event.message.type in {"channel_prefix", "midi_port"}:
+            return event.port == port and (
+                event.message.type == "midi_port"
+                or event.message.channel == channel
+            )
+        return True
     if is_channel_event(event):
         return event.port == port and event.message.channel == channel
-    return event.message.type in _LOCAL_METADATA_TYPES and event.port == port
+    return True
 
 
 def _make_source(
@@ -158,10 +170,6 @@ def is_note_on(event: TimedMidiEvent) -> bool:
 
 def is_channel_event(event: TimedMidiEvent) -> bool:
     return hasattr(event.message, "channel")
-
-
-def is_global_event(event: TimedMidiEvent) -> bool:
-    return event.message.is_meta and event.message.type not in _LOCAL_METADATA_TYPES
 
 
 def event_sort_key(event: TimedMidiEvent) -> tuple[int, int, int]:
