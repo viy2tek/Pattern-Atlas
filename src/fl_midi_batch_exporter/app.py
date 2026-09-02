@@ -6,10 +6,12 @@ from PySide6.QtWidgets import QApplication
 
 from .application import MidiExportService
 from .gui.main_window import MainWindow
+from .logging_config import configure_logging
 
 
 def run() -> int:
     """Show the MIDI exporter window and return Qt's exit status."""
+    configure_logging()
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("Pattern Atlas")
     window = MainWindow(MidiExportService())

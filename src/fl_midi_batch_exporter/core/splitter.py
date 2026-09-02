@@ -1,5 +1,6 @@
 """Select the timeline events that belong to an exportable MIDI source."""
 
+from .metadata import is_global_event
 from .models import MidiProjectAnalysis, MidiSource, TimedMidiEvent
 
 
@@ -23,7 +24,7 @@ def _belongs_to_source(event: TimedMidiEvent, source: MidiSource) -> bool:
     """Return whether an event can be written to one source stem."""
     if event.track_index != source.track_index:
         return False
-    if event.message.type == "end_of_track" or _is_global_event(event):
+    if event.message.type == "end_of_track" or is_global_event(event):
         return False
     if event.message.type == "sysex":
         if source.channel is None:
@@ -39,14 +40,3 @@ def _belongs_to_source(event: TimedMidiEvent, source: MidiSource) -> bool:
     if source.channel is None:
         return True
     return event.port == source.port and event.message.channel == source.channel
-
-
-def _is_global_event(event: TimedMidiEvent) -> bool:
-    """Match the analyzer's conductor-event classification without a cycle."""
-    return event.message.is_meta and event.message.type not in {
-        "channel_prefix",
-        "end_of_track",
-        "instrument_name",
-        "midi_port",
-        "track_name",
-    }

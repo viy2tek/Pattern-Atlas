@@ -6,7 +6,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QObject, QThread, QUrl, Qt, Signal, Slot
+from PySide6.QtCore import QEvent, QObject, Qt, QThread, QUrl, Signal, Slot
 from PySide6.QtGui import (
     QCloseEvent,
     QDesktopServices,
@@ -17,6 +17,7 @@ from PySide6.QtGui import (
     QResizeEvent,
 )
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -25,18 +26,16 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QComboBox,
     QVBoxLayout,
     QWidget,
 )
 
 from ..application import MidiExportService
 from ..core.models import ExportResult, MidiExportError, MidiProjectAnalysis, SplitMode
-from .drop_zone import DragOverlay, DropZone, MIDI_SUFFIXES
+from .drop_zone import MIDI_SUFFIXES, DragOverlay, DropZone
 from .icons import IconLabel, svg_icon
 from .result_list import ResultList
 from .theme import APP_STYLESHEET
-
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +65,7 @@ class _ServiceWorker(QObject):
             self.succeeded.emit(self._operation())
         except MidiExportError as error:
             self.failed.emit(str(error), error, self._clear_analysis_on_failure)
-        except Exception as error:  # pragma: no cover - defensive GUI boundary
+        except Exception as error:  # noqa: BLE001  # pragma: no cover - GUI boundary
             self.failed.emit(
                 self._error_message, error, self._clear_analysis_on_failure
             )

@@ -7,7 +7,6 @@ from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QLabel, QWidget
 
-
 ICON_PATHS: dict[str, str] = {
     "upload": "M4 17.5a3 3 0 0 1 .6-5.9A5.5 5.5 0 0 1 15 9.5a4 4 0 0 1 4.4 6 M12 18V8.5 M8.7 11.8 12 8.5l3.3 3.3",
     "folder": "M3.5 7.5h6l2-2h9v12.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z",
