@@ -142,3 +142,18 @@ def test_successful_batch_exports_reopenable_stems(
 
     assert [stem.path.name for stem in result.stems] == ["01 - Lead.mid", "02 - Bass.mid"]
     assert all(mido.MidiFile(stem.path).tracks for stem in result.stems)
+
+
+def test_export_reports_each_stem_after_it_is_committed(
+    midi_file: Callable[..., Path], tmp_path: Path
+) -> None:
+    progress: list[object] = []
+
+    result = MidiExportService().export(
+        _two_track_file(midi_file),
+        tmp_path / "stems",
+        SplitMode.TRACK,
+        on_stem=progress.append,
+    )
+
+    assert progress == list(result.stems)

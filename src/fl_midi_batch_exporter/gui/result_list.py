@@ -3,7 +3,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QListWidget
 
-from ..core.models import ExportResult
+from ..core.models import ExportedStem, ExportResult
 from .icons import IconLabel
 
 
@@ -31,7 +31,11 @@ class ResultList(QListWidget):
         """Replace current rows with the files produced by an export."""
         self.clear()
         for stem in result.stems:
-            self.addItem(f"{stem.path.name} — {stem.note_count} notes")
+            self.add_exported_stem(stem)
+
+    def add_exported_stem(self, stem: ExportedStem) -> None:
+        """Append one committed stem to the visible export list."""
+        self.addItem(f"{stem.path.name} — {stem.note_count} notes")
         self._update_empty_state()
 
     def _update_empty_state(self) -> None:

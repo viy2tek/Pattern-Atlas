@@ -1,5 +1,6 @@
 """Application service that composes the MIDI export core."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from .core.analyzer import analyze_midi
@@ -30,6 +31,7 @@ class MidiExportService:
         input_path: Path,
         output_dir: Path,
         mode: SplitMode = SplitMode.AUTO,
+        on_stem: Callable[[ExportedStem], None] | None = None,
     ) -> ExportResult:
         """Export all detected sources, creating *output_dir* when needed."""
         analysis = self.analyze(input_path, mode)
@@ -42,10 +44,14 @@ class MidiExportService:
                 f"Could not create the output folder '{output_dir}'. "
                 "Choose a writable folder and try again."
             ) from error
-        return export_all_stems(analysis, output_dir)
+        return export_all_stems(analysis, output_dir, on_stem=on_stem)
 
 
-def export_all_stems(analysis: MidiProjectAnalysis, output_dir: Path) -> ExportResult:
+def export_all_stems(
+    analysis: MidiProjectAnalysis,
+    output_dir: Path,
+    on_stem: Callable[[ExportedStem], None] | None = None,
+) -> ExportResult:
     """Write every non-empty source from *analysis* into *output_dir*."""
     stems: list[ExportedStem] = []
     owned_outputs: list[tuple[Path, OutputFileIdentity]] = []
@@ -64,7 +70,10 @@ def export_all_stems(analysis: MidiProjectAnalysis, output_dir: Path) -> ExportR
                     (path, identity)
                 ),
             )
-            stems.append(ExportedStem(path, source, len(events), source.note_count))
+            stem = ExportedStem(path, source, len(events), source.note_count)
+            stems.append(stem)
+            if on_stem is not None:
+                on_stem(stem)
     except BaseException:
         for path, identity in owned_outputs:
             remove_file_if_owned(path, identity)
