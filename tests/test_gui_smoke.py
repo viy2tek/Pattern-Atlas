@@ -76,3 +76,44 @@ def test_failed_export_removes_partial_rows_from_the_result_list() -> None:
     assert window.result_list.count() == 0
     window.close()
     app.processEvents()
+
+
+def test_main_window_exports_multiple_midi_inputs(
+    midi_file, tmp_path
+) -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(MidiExportService())
+    window._show_message = lambda *args: None
+
+    first = midi_file(
+        "Song 01.mid",
+        [[mido.Message("note_on", note=60, velocity=100)]],
+    )
+    second = midi_file(
+        "Song 02.mid",
+        [[mido.Message("note_on", note=48, velocity=100)]],
+    )
+
+    window.load_files([first, second])
+    deadline = time.monotonic() + 5
+    while window._is_busy and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+
+    assert not window._is_busy
+    assert window.source_label.text() == "2 MIDI files selected"
+    assert window.detected_label.text() == "2 MIDI sources"
+    window.output_dir_input.setText(str(tmp_path / "batch-output"))
+    window._export()
+
+    deadline = time.monotonic() + 5
+    while window._is_busy and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+
+    assert not window._is_busy
+    assert window.result_list.count() == 2
+    assert (tmp_path / "batch-output" / "Song 01 - MIDI Stems").is_dir()
+    assert (tmp_path / "batch-output" / "Song 02 - MIDI Stems").is_dir()
+    window.close()
+    app.processEvents()

@@ -29,3 +29,26 @@ def test_cli_reports_user_error_without_traceback(tmp_path: Path, capsys) -> Non
     assert exit_code == 2
     assert captured.out == ""
     assert captured.err.startswith("Error:")
+
+
+def test_cli_exports_multiple_files_into_separate_folders(
+    midi_file: Callable[..., Path], tmp_path: Path, capsys
+) -> None:
+    first = midi_file(
+        "Song 01.mid",
+        [[mido.Message("note_on", note=60, velocity=100)]],
+    )
+    second = midi_file(
+        "Song 02.mid",
+        [[mido.Message("note_on", note=48, velocity=100)]],
+    )
+    output_root = tmp_path / "batch-output"
+
+    exit_code = main(
+        [str(first), str(second), "--output", str(output_root), "--mode", "track"]
+    )
+
+    assert exit_code == 0
+    assert capsys.readouterr().out == "2 MIDI files exported from 2 inputs\n"
+    assert len(list((output_root / "Song 01 - MIDI Stems").glob("*.mid"))) == 1
+    assert len(list((output_root / "Song 02 - MIDI Stems").glob("*.mid"))) == 1

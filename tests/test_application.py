@@ -157,3 +157,87 @@ def test_export_reports_each_stem_after_it_is_committed(
     )
 
     assert progress == list(result.stems)
+
+
+def test_export_many_creates_one_output_folder_per_input(
+    midi_file: Callable[..., Path], tmp_path: Path
+) -> None:
+    first = midi_file(
+        "Song 01.mid",
+        [[mido.Message("note_on", note=60, velocity=100)]],
+    )
+    second = midi_file(
+        "Song 02.mid",
+        [[mido.Message("note_on", note=48, velocity=100)]],
+    )
+    output_root = tmp_path / "batch-output"
+
+    result = MidiExportService().export_many(
+        [first, second], output_root, SplitMode.TRACK
+    )
+
+    assert [item.input_path for item in result.items] == [first, second]
+    assert all(
+        item.output_dir == output_root / f"{item.input_path.stem} - MIDI Stems"
+        for item in result.items
+    )
+    assert all(item.result.stems for item in result.items)
+
+
+def test_collect_midi_inputs_expands_folders_recursively(
+    midi_file: Callable[..., Path], tmp_path: Path
+) -> None:
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    first = midi_file("top.mid", [[mido.Message("note_on", note=60, velocity=100)]])
+    second = nested / "nested.midi"
+    midi = mido.MidiFile(type=1, ticks_per_beat=480)
+    midi.tracks.append(mido.MidiTrack([mido.Message("note_on", note=48, velocity=100)]))
+    midi.save(second)
+    (nested / "ignore.txt").write_text("not MIDI", encoding="utf-8")
+
+    assert MidiExportService.collect_midi_inputs([tmp_path]) == tuple(
+        sorted((first.resolve(), second.resolve()), key=lambda item: str(item).casefold())
+    )
+
+
+def test_export_many_does_not_reprocess_previous_output(
+    midi_file: Callable[..., Path], tmp_path: Path
+) -> None:
+    input_root = tmp_path / "input"
+    input_root.mkdir()
+    source = input_root / "Song.mid"
+    midi = mido.MidiFile(type=1, ticks_per_beat=480)
+    midi.tracks.append(mido.MidiTrack([mido.Message("note_on", note=60, velocity=100)]))
+    midi.save(source)
+    output_root = input_root / "Pattern Atlas Batch"
+
+    service = MidiExportService()
+    service.export_many([input_root], output_root, SplitMode.TRACK)
+    result = service.export_many([input_root], output_root, SplitMode.TRACK)
+
+    assert [item.input_path for item in result.items] == [source.resolve()]
+
+
+def test_export_many_disambiguates_duplicate_input_names(
+    midi_file: Callable[..., Path], tmp_path: Path
+) -> None:
+    first_dir = tmp_path / "first"
+    second_dir = tmp_path / "second"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    first = midi_file("placeholder.mid", [[mido.Message("note_on", note=60, velocity=100)]])
+    first.rename(first_dir / "song.mid")
+    second = second_dir / "song.mid"
+    midi = mido.MidiFile(type=1, ticks_per_beat=480)
+    midi.tracks.append(mido.MidiTrack([mido.Message("note_on", note=48, velocity=100)]))
+    midi.save(second)
+
+    result = MidiExportService().export_many(
+        [first_dir, second_dir], tmp_path / "output", SplitMode.TRACK
+    )
+
+    assert [item.output_dir.name for item in result.items] == [
+        "song - MIDI Stems",
+        "song (2) - MIDI Stems",
+    ]

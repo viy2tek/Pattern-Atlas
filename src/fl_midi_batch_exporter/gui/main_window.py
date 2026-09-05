@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -34,6 +35,7 @@ from ..application import MidiExportService
 from ..core.models import (
     ExportedStem,
     ExportResult,
+    MidiBatchResult,
     MidiExportError,
     MidiProjectAnalysis,
     SplitMode,
@@ -89,7 +91,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.service = service
         self._input_path: Path | None = None
+        self._input_paths: tuple[Path, ...] = ()
         self._analysis: MidiProjectAnalysis | None = None
+        self._analyses: tuple[tuple[Path, MidiProjectAnalysis], ...] = ()
         self._last_output_dir: Path | None = None
         self._thread: QThread | None = None
         self._worker: _ServiceWorker | None = None
@@ -252,7 +256,7 @@ class MainWindow(QMainWindow):
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         """Accept valid MIDI drags over any part of the main window."""
-        if DropZone.midi_path_from_event(event) is not None:
+        if DropZone.input_paths_from_event(event):
             self._set_drag_overlay_visible(True)
             event.acceptProposedAction()
         else:
@@ -260,20 +264,20 @@ class MainWindow(QMainWindow):
 
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
         """Keep the full-window drop target active while dragging."""
-        if DropZone.midi_path_from_event(event) is not None:
+        if DropZone.input_paths_from_event(event):
             self._set_drag_overlay_visible(True)
             event.acceptProposedAction()
         else:
             event.ignore()
 
     def dropEvent(self, event: QDropEvent) -> None:
-        """Load a valid MIDI file dropped anywhere in the window."""
-        path = DropZone.midi_path_from_event(event)
+        """Load MIDI files or folders dropped anywhere in the window."""
+        paths = DropZone.input_paths_from_event(event)
         self._set_drag_overlay_visible(False)
-        if path is None:
+        if not paths:
             event.ignore()
             return
-        self.load_file(path)
+        self.load_files(paths)
         event.acceptProposedAction()
 
     def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
@@ -288,7 +292,7 @@ class MainWindow(QMainWindow):
         ):
             event_type = event.type()
             if event_type in (QEvent.Type.DragEnter, QEvent.Type.DragMove):
-                if DropZone.midi_path_from_event(event):  # type: ignore[arg-type]
+                if DropZone.input_paths_from_event(event):  # type: ignore[arg-type]
                     self._set_drag_overlay_visible(True)
             elif event_type == QEvent.Type.Drop:
                 self._set_drag_overlay_visible(False)
@@ -328,50 +332,76 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _browse_for_file(self) -> None:
-        filename, _ = QFileDialog.getOpenFileName(
+        filenames, _ = QFileDialog.getOpenFileNames(
             self,
-            "Choose MIDI file",
+            "Choose MIDI files",
             str(self._input_path.parent if self._input_path else Path.home()),
             "MIDI files (*.mid *.midi)",
         )
-        if filename:
-            self.load_file(Path(filename))
+        if filenames:
+            self.load_files(tuple(Path(filename) for filename in filenames))
 
     @Slot(Path)
     def load_file(self, path: Path) -> None:
         """Start analysis for a selected MIDI file."""
-        if not self._is_valid_midi_file(path):
+        self.load_files((path,))
+
+    def load_files(self, paths: tuple[Path, ...] | list[Path]) -> None:
+        """Start analysis for MIDI files and folders selected by the user."""
+        requested = tuple(Path(path) for path in paths)
+        if not requested:
             self._show_message(
-                "Choose a MIDI file",
-                "Please select a readable .mid or .midi file.",
+                "Choose MIDI files",
+                "Please select at least one MIDI file or folder.",
                 QMessageBox.Icon.Warning,
             )
             return
         if self._is_busy:
             return
 
-        self._input_path = path
+        self._input_paths = requested
+        self._input_path = requested[0]
         self._analysis = None
+        self._analyses = ()
         self._last_output_dir = None
-        self.source_label.setText(path.name)
+        self.source_label.setText(
+            requested[0].name if len(requested) == 1 else f"{len(requested)} MIDI files selected"
+        )
         self.detected_label.setText("Analyzing MIDI sources…")
         self.status_label.setText("Analyzing MIDI…")
-        self.output_dir_input.setText(str(path.with_name(f"{path.stem} - MIDI Stems")))
+        self.output_dir_input.setText(str(self._default_output_directory(requested)))
         self.result_list.clear()
         self._update_controls()
 
         mode = self._selected_mode()
         self._start_worker(
-            lambda _progress: self.service.analyze(path, mode),
+            lambda _progress: self._analyze_inputs(requested, mode),
             self._analysis_loaded,
-            "The MIDI file could not be analyzed. Please try another file.",
+            "The MIDI files could not be analyzed. Please try another selection.",
             clear_analysis_on_failure=True,
         )
 
+    def _analyze_inputs(
+        self, requested: tuple[Path, ...], mode: SplitMode
+    ) -> tuple[tuple[Path, MidiProjectAnalysis], ...]:
+        """Expand selected folders and analyze every discovered MIDI file."""
+        inputs = self.service.collect_midi_inputs(requested)
+        return tuple((path, self.service.analyze(path, mode)) for path in inputs)
+
+    @staticmethod
+    def _default_output_directory(requested: tuple[Path, ...]) -> Path:
+        """Choose the current single-file path or a shared batch root."""
+        if len(requested) == 1 and requested[0].is_file():
+            return requested[0].with_name(f"{requested[0].stem} - MIDI Stems")
+        if len(requested) == 1 and requested[0].is_dir():
+            return requested[0] / "Pattern Atlas Batch"
+        parents = [path.parent for path in requested]
+        return Path(os.path.commonpath([str(path) for path in parents])) / "Pattern Atlas Batch"
+
     @Slot(int)
     def _mode_changed(self, _: int) -> None:
-        if self._input_path is not None and not self._is_busy:
-            self.load_file(self._input_path)
+        if self._input_paths and not self._is_busy:
+            self.load_files(self._input_paths)
 
     @Slot()
     def _choose_output_directory(self) -> None:
@@ -382,7 +412,13 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _export(self) -> None:
-        if self._input_path is None or self._analysis is None:
+        # Keep the single-file state contract usable for callers that loaded
+        # the analysis directly before the batch workflow was introduced.
+        if not self._input_paths and self._input_path is not None:
+            self._input_paths = (self._input_path,)
+        if not self._analyses and self._analysis is not None and self._input_path is not None:
+            self._analyses = ((self._input_path, self._analysis),)
+        if not self._input_paths or not self._analyses:
             return
         output_text = self.output_dir_input.text().strip()
         if not output_text:
@@ -393,15 +429,20 @@ class MainWindow(QMainWindow):
             )
             return
 
-        input_path = self._input_path
         output_dir = Path(output_text)
         mode = self._selected_mode()
         self.status_label.setText("Exporting MIDI stems…")
         self.result_list.clear()
+        if len(self._input_paths) == 1:
+            operation = lambda progress: self.service.export(
+                self._input_paths[0], output_dir, mode, on_stem=progress
+            )
+        else:
+            operation = lambda progress: self.service.export_many(
+                self._input_paths, output_dir, mode, on_stem=progress
+            )
         self._start_worker(
-            lambda progress: self.service.export(
-                input_path, output_dir, mode, on_stem=progress
-            ),
+            operation,
             self._export_finished,
             "The MIDI stems could not be exported. Please try again.",
             clear_analysis_on_failure=False,
@@ -409,17 +450,29 @@ class MainWindow(QMainWindow):
         )
 
     def _analysis_loaded(self, result: object) -> None:
-        analysis = result
-        if not isinstance(analysis, MidiProjectAnalysis):
+        analyses = result
+        if not isinstance(analyses, tuple) or not all(
+            isinstance(item, tuple)
+            and len(item) == 2
+            and isinstance(item[0], Path)
+            and isinstance(item[1], MidiProjectAnalysis)
+            for item in analyses
+        ):
             raise TypeError("Analysis worker returned an unexpected result.")
-        self._analysis = analysis
-        self.detected_label.setText(f"{len(analysis.sources)} MIDI sources")
+        self._analyses = analyses
+        self._analysis = analyses[0][1] if len(analyses) == 1 else None
+        source_count = sum(len(analysis.sources) for _, analysis in analyses)
+        if len(analyses) == 1:
+            self.source_label.setText(analyses[0][0].name)
+        else:
+            self.source_label.setText(f"{len(analyses)} MIDI files selected")
+        self.detected_label.setText(f"{source_count} MIDI sources")
         self.status_label.setText("Ready to export.")
         self._update_controls()
 
     def _export_finished(self, result: object) -> None:
         export_result = result
-        if not isinstance(export_result, ExportResult):
+        if not isinstance(export_result, (ExportResult, MidiBatchResult)):
             raise TypeError("Export worker returned an unexpected result.")
         self.result_list.show_export_result(export_result)
         self._last_output_dir = Path(self.output_dir_input.text())
@@ -497,7 +550,7 @@ class MainWindow(QMainWindow):
         can_select_input = not self._is_busy
         self.browse_button.setEnabled(can_select_input)
         self.mode_selector.setEnabled(can_select_input)
-        self.export_button.setEnabled(self._analysis is not None and not self._is_busy)
+        self.export_button.setEnabled(bool(self._analyses) and not self._is_busy)
         self.open_folder_button.setEnabled(
             self._last_output_dir is not None and not self._is_busy
         )

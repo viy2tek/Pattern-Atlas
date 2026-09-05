@@ -1,12 +1,13 @@
 # Pattern Atlas
 
-Offline Windows MIDI exporter for splitting one Standard MIDI File into organized stems.
+Offline Windows MIDI exporter for splitting one or many Standard MIDI Files into organized stems.
 
 ![Pattern Atlas interface](docs/pattern-atlas-interface.png)
 
 ## Features
 
 - Split Type 0 and Type 1 `.mid` and `.midi` files by track, MIDI channel, or automatically
+- Process multiple MIDI files or folders recursively in one batch
 - Preserve notes, timing, tempo, and MIDI metadata
 - Export each detected source as a separate `.mid` file
 - Prevent incomplete output files when an export is interrupted
@@ -16,9 +17,13 @@ Offline Windows MIDI exporter for splitting one Standard MIDI File into organize
 ## Usage
 
 1. Open Pattern Atlas.
-2. Browse for a MIDI file or drop one into the window.
+2. Browse for one or more MIDI files, or drop files/folders into the window.
 3. Choose an output folder and split mode.
 4. Click **Export MIDI Stems**.
+
+For a batch, each input receives its own folder below the selected output root,
+such as `Song 01 - MIDI Stems` and `Song 02 - MIDI Stems`. Folders are scanned
+recursively, and previously generated output folders are not processed again.
 
 ## Preparing a MIDI file in FL Studio
 
@@ -59,6 +64,8 @@ Older builds remain available on the [Releases](https://github.com/viy2tek/Patte
 
 ```powershell
 midi-exporter song.mid -o output --mode auto
+midi-exporter song-01.mid song-02.mid -o output --mode auto
+midi-exporter .\midi-folder -o output --mode auto
 ```
 
 ## Development

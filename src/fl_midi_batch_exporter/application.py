@@ -1,12 +1,14 @@
 """Application service that composes the MIDI export core."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from .core.analyzer import analyze_midi
 from .core.models import (
     ExportedStem,
     ExportResult,
+    MidiBatchItem,
+    MidiBatchResult,
     MidiExportError,
     MidiProjectAnalysis,
     SplitMode,
@@ -45,6 +47,73 @@ class MidiExportService:
                 "Choose a writable folder and try again."
             ) from error
         return export_all_stems(analysis, output_dir, on_stem=on_stem)
+
+    @staticmethod
+    def collect_midi_inputs(
+        inputs: Iterable[Path], excluded_root: Path | None = None
+    ) -> tuple[Path, ...]:
+        """Expand files and folders into a sorted, de-duplicated MIDI list."""
+        paths: dict[Path, Path] = {}
+        excluded = excluded_root.resolve() if excluded_root is not None else None
+        for raw_path in inputs:
+            path = Path(raw_path)
+            if path.is_file():
+                if path.suffix.lower() in {".mid", ".midi"}:
+                    resolved = path.resolve()
+                    paths[resolved] = resolved
+                continue
+            if path.is_dir():
+                for candidate in path.rglob("*"):
+                    if excluded is not None and candidate.resolve().is_relative_to(excluded):
+                        continue
+                    if candidate.is_file() and candidate.suffix.lower() in {
+                        ".mid",
+                        ".midi",
+                    }:
+                        resolved = candidate.resolve()
+                        paths[resolved] = resolved
+                continue
+            raise MidiExportError(f"Input path does not exist: '{path}'.")
+
+        if not paths:
+            raise MidiExportError("No MIDI files were found in the selected input.")
+        return tuple(sorted(paths.values(), key=lambda item: str(item).casefold()))
+
+    def export_many(
+        self,
+        inputs: Iterable[Path],
+        output_root: Path,
+        mode: SplitMode = SplitMode.AUTO,
+        on_stem: Callable[[ExportedStem], None] | None = None,
+        on_file: Callable[[MidiBatchItem], None] | None = None,
+    ) -> MidiBatchResult:
+        """Export each MIDI input into its own folder below *output_root*."""
+        try:
+            output_root.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise MidiExportError(
+                f"Could not create the output folder '{output_root}'. "
+                "Choose a writable folder and try again."
+            ) from error
+        paths = self.collect_midi_inputs(inputs, excluded_root=output_root)
+
+        items: list[MidiBatchItem] = []
+        used_output_dirs: set[Path] = set()
+        for input_path in paths:
+            output_dir = output_root / f"{input_path.stem} - MIDI Stems"
+            suffix = 2
+            while output_dir in used_output_dirs:
+                output_dir = output_root / (
+                    f"{input_path.stem} ({suffix}) - MIDI Stems"
+                )
+                suffix += 1
+            used_output_dirs.add(output_dir)
+            result = self.export(input_path, output_dir, mode, on_stem=on_stem)
+            item = MidiBatchItem(input_path, output_dir, result)
+            items.append(item)
+            if on_file is not None:
+                on_file(item)
+        return MidiBatchResult(tuple(items))
 
 
 def export_all_stems(

@@ -65,5 +65,31 @@ class ExportResult:
     total_notes: int = 0
 
 
+@dataclass(frozen=True)
+class MidiBatchItem:
+    """The exported result and destination for one input MIDI file."""
+
+    input_path: Path
+    output_dir: Path
+    result: ExportResult
+
+
+@dataclass(frozen=True)
+class MidiBatchResult:
+    """Results from exporting multiple MIDI input files."""
+
+    items: tuple[MidiBatchItem, ...]
+
+    @property
+    def stems(self) -> tuple[ExportedStem, ...]:
+        """Return all exported stems in input order."""
+        return tuple(stem for item in self.items for stem in item.result.stems)
+
+    @property
+    def total_notes(self) -> int:
+        """Return the total note count across all exported inputs."""
+        return sum(item.result.total_notes for item in self.items)
+
+
 class MidiExportError(Exception):
     """A user-recoverable error while reading, analyzing, or exporting MIDI."""

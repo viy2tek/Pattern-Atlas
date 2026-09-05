@@ -12,9 +12,10 @@ MIDI_SUFFIXES = {".mid", ".midi"}
 
 
 class DropZone(QFrame):
-    """Accept one local MIDI file dropped onto the application window."""
+    """Accept local MIDI files and folders dropped onto the application."""
 
     file_dropped = Signal(Path)
+    files_dropped = Signal(object)
 
     def __init__(self, parent: object | None = None) -> None:
         super().__init__(parent)
@@ -23,7 +24,7 @@ class DropZone(QFrame):
         self.setObjectName("dropZone")
 
         self.icon = IconLabel("upload", "#5f6879", 34)
-        self.title_label = QLabel("Drop a MIDI file here")
+        self.title_label = QLabel("Drop MIDI files or a folder here")
         self.title_label.setObjectName("dropTitle")
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hint_label = QLabel("Supports .mid and .midi files")
@@ -38,34 +39,57 @@ class DropZone(QFrame):
         layout.addWidget(self.hint_label)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        """Accept drags only when they contain a local MIDI file."""
-        if self.midi_path_from_event(event) is not None:
+        """Accept drags containing MIDI files or folders."""
+        if self.input_paths_from_event(event):
             event.acceptProposedAction()
         else:
             event.ignore()
 
     def dropEvent(self, event: QDropEvent) -> None:
-        """Notify listeners of the first valid dropped file."""
-        path = self.midi_path_from_event(event)
-        if path is None:
+        """Notify listeners of every valid dropped file or folder."""
+        paths = self.input_paths_from_event(event)
+        if not paths:
             event.ignore()
             return
-        self.file_dropped.emit(path)
+        self.files_dropped.emit(paths)
+        first_file = next(
+            (path for path in paths if path.is_file() and path.suffix.lower() in MIDI_SUFFIXES),
+            None,
+        )
+        if first_file is not None:
+            self.file_dropped.emit(first_file)
         event.acceptProposedAction()
+
+    @staticmethod
+    def input_paths_from_event(
+        event: QDragEnterEvent | QDragMoveEvent | QDropEvent,
+    ) -> tuple[Path, ...]:
+        mime_data = event.mimeData()
+        if not mime_data.hasUrls():
+            return ()
+        paths: list[Path] = []
+        for url in mime_data.urls():
+            if url.isLocalFile():
+                path = Path(url.toLocalFile())
+                if path.is_dir() or (
+                    path.is_file() and path.suffix.lower() in MIDI_SUFFIXES
+                ):
+                    paths.append(path)
+        return tuple(dict.fromkeys(paths))
 
     @staticmethod
     def midi_path_from_event(
         event: QDragEnterEvent | QDragMoveEvent | QDropEvent,
     ) -> Path | None:
-        mime_data = event.mimeData()
-        if not mime_data.hasUrls():
-            return None
-        for url in mime_data.urls():
-            if url.isLocalFile():
-                path = Path(url.toLocalFile())
-                if path.is_file() and path.suffix.lower() in MIDI_SUFFIXES:
-                    return path
-        return None
+        """Return the first MIDI file for compatibility with the single-file API."""
+        return next(
+            (
+                path
+                for path in DropZone.input_paths_from_event(event)
+                if path.is_file() and path.suffix.lower() in MIDI_SUFFIXES
+            ),
+            None,
+        )
 
 
 class DragOverlay(QFrame):
@@ -80,7 +104,9 @@ class DragOverlay(QFrame):
         self.title_label = QLabel("Drop Here")
         self.title_label.setObjectName("dragOverlayTitle")
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.hint_label = QLabel("Release a .mid or .midi file anywhere in this area")
+        self.hint_label = QLabel(
+            "Release .mid or .midi files, or a folder, anywhere in this area"
+        )
         self.hint_label.setObjectName("dragOverlayHint")
         self.hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
