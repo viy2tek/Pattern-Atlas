@@ -2,6 +2,8 @@
 
 Offline Windows MIDI exporter for splitting one or many Standard MIDI Files into organized stems.
 
+See the [changelog](CHANGELOG.md) for release updates.
+
 ![Pattern Atlas interface](docs/pattern-atlas-interface.png)
 
 ## Features
