@@ -96,6 +96,42 @@ jobs:
           Write-Host "Asset: $assetName"
           Write-Host "SHA-256: $hash"
 
+      - name: Prepare changelog notes
+        id: notes
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          $changelogPath = Join-Path $env:GITHUB_WORKSPACE "CHANGELOG.md"
+          if (-not (Test-Path -LiteralPath $changelogPath -PathType Leaf)) {
+              throw "CHANGELOG.md was not found. Add release notes before publishing."
+          }
+
+          $lines = @(Get-Content -LiteralPath $changelogPath)
+          $start = -1
+          for ($index = 0; $index -lt $lines.Count; $index++) {
+              if ($lines[$index] -match "^## \[$([regex]::Escape($version))\]") {
+                  $start = $index
+                  break
+              }
+          }
+          if ($start -lt 0) {
+              throw "CHANGELOG.md has no section for [$version]."
+          }
+
+          $end = $lines.Count
+          for ($index = $start + 1; $index -lt $lines.Count; $index++) {
+              if ($lines[$index] -match '^## \[') {
+                  $end = $index
+                  break
+              }
+          }
+
+          $notesPath = Join-Path $env:RUNNER_TEMP "release-notes.md"
+          Set-Content -LiteralPath $notesPath -Value ($lines[$start..($end - 1)] -join [Environment]::NewLine) -Encoding utf8
+          "body_path=$notesPath" >> $env:GITHUB_OUTPUT
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -111,5 +147,5 @@ jobs:
           tag_name: ${{ steps.metadata.outputs.tag }}
           name: Pattern Atlas ${{ steps.metadata.outputs.tag }}
           files: ${{ steps.asset.outputs.asset }}
+          body_path: ${{ steps.notes.outputs.body_path }}
           fail_on_unmatched_files: true
-          generate_release_notes: true
