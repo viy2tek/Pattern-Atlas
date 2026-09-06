@@ -8,7 +8,7 @@ from .reader import ReadMidiFile
 
 
 def analyze_midi(read: ReadMidiFile, mode: SplitMode = SplitMode.AUTO) -> MidiProjectAnalysis:
-    """Identify a conservative track- or channel-based split for *read*."""
+    """Identify exportable MIDI sources using the requested split strategy."""
     musical_tracks = tuple(index for index, track in enumerate(read.tracks) if has_note_on(track))
     strategy = resolve_strategy(mode, musical_tracks)
     sources, source_events = detect_sources(read.tracks, strategy)
@@ -27,10 +27,10 @@ def has_note_on(events: Iterable[TimedMidiEvent]) -> bool:
 
 
 def resolve_strategy(mode: SplitMode, musical_tracks: tuple[int, ...]) -> SplitMode:
-    """Choose tracks only when AUTO finds notes in more than one track."""
-    if mode is not SplitMode.AUTO:
-        return mode
-    return SplitMode.TRACK if len(musical_tracks) > 1 else SplitMode.CHANNEL
+    """Resolve the legacy AUTO mode to the Smart hybrid strategy."""
+    if mode is SplitMode.AUTO:
+        return SplitMode.SMART
+    return mode
 
 
 def global_events(tracks: tuple[tuple[TimedMidiEvent, ...], ...]) -> tuple[TimedMidiEvent, ...]:
@@ -57,13 +57,22 @@ def detect_sources(
     """Build sources and their non-conductor event streams for *strategy*."""
     if strategy is SplitMode.TRACK:
         candidates = _track_candidates(tracks)
-    else:
+    elif strategy is SplitMode.CHANNEL:
         candidates = _channel_candidates(tracks)
+    else:
+        candidates = _hybrid_candidates(tracks)
 
     sources: list[MidiSource] = []
     source_events: dict[str, tuple[TimedMidiEvent, ...]] = {}
     for track_index, port, channel, events in candidates:
-        source = _make_source(track_index, port, channel, events, tracks[track_index])
+        source = _make_source(
+            track_index,
+            port,
+            channel,
+            events,
+            tracks[track_index],
+            include_channel_name=strategy is SplitMode.SMART and channel is not None,
+        )
         sources.append(source)
         source_events[source.id] = events
     return tuple(sources), source_events
@@ -108,6 +117,38 @@ def _channel_candidates(
     return tuple(candidates)
 
 
+def _hybrid_candidates(
+    tracks: tuple[tuple[TimedMidiEvent, ...], ...]
+) -> tuple[tuple[int, int | None, int | None, tuple[TimedMidiEvent, ...]], ...]:
+    """Keep simple tracks intact and split tracks containing multiple channels."""
+    candidates = []
+    for track_index, track in enumerate(tracks):
+        if not has_note_on(track):
+            continue
+        identities = {
+            (event.port, event.message.channel)
+            for event in track
+            if is_note_on(event)
+        }
+        if len(identities) <= 1:
+            events = tuple(event for event in track if not is_global_event(event))
+            ports = {event.port for event in events if is_channel_event(event)}
+            port = next(iter(ports)) if len(ports) == 1 else None
+            candidates.append((track_index, port, None, events))
+            continue
+        for port, channel in sorted(
+            identities,
+            key=lambda item: (item[0] is not None, item[0] or 0, item[1]),
+        ):
+            events = tuple(
+                event
+                for event in track
+                if _belongs_to_channel_source(event, port, channel)
+            )
+            candidates.append((track_index, port, channel, events))
+    return tuple(candidates)
+
+
 def _belongs_to_channel_source(event: TimedMidiEvent, port: int | None, channel: int) -> bool:
     if is_global_event(event):
         return False
@@ -136,8 +177,9 @@ def _make_source(
     channel: int | None,
     events: tuple[TimedMidiEvent, ...],
     track: tuple[TimedMidiEvent, ...],
+    include_channel_name: bool = False,
 ) -> MidiSource:
-    name = _source_name(track, track_index, channel)
+    name = _source_name(track, track_index, channel, include_channel_name)
     source_id = f"t{track_index}-p{port if port is not None else 'none'}-c{channel if channel is not None else 'all'}"
     note_events = tuple(event for event in events if is_note_on(event))
     note_values = tuple(event.message.note for event in note_events)
@@ -156,11 +198,19 @@ def _make_source(
     )
 
 
-def _source_name(track: tuple[TimedMidiEvent, ...], track_index: int, channel: int | None) -> str:
+def _source_name(
+    track: tuple[TimedMidiEvent, ...],
+    track_index: int,
+    channel: int | None,
+    include_channel_name: bool = False,
+) -> str:
     for message_type in ("track_name", "instrument_name"):
         for event in track:
             if event.message.type == message_type and getattr(event.message, "name", ""):
-                return event.message.name
+                name = event.message.name
+                if include_channel_name and channel is not None:
+                    return f"{name} - Ch {channel + 1}"
+                return name
     if channel is not None:
         return f"Channel {channel + 1}"
     return f"Track {track_index + 1}"

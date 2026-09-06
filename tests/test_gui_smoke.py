@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from fl_midi_batch_exporter.application import MidiExportService
-from fl_midi_batch_exporter.core.models import MidiExportError
+from fl_midi_batch_exporter.core.models import MidiExportError, SplitMode
 from fl_midi_batch_exporter.gui.main_window import MainWindow
 
 
@@ -23,6 +23,8 @@ def test_main_window_preserves_the_current_layout_contract() -> None:
     assert window.export_button.text() == "Export MIDI Stems"
     assert window.export_button.isEnabled() is False
     assert window.mode_selector.count() == 3
+    assert window.mode_selector.itemText(0) == "Smart (Hybrid)"
+    assert window.mode_selector.itemData(0) == SplitMode.SMART.value
 
     window.close()
     app.processEvents()
@@ -75,6 +77,21 @@ def test_failed_export_removes_partial_rows_from_the_result_list() -> None:
     window._worker_failed("write failed", MidiExportError("write failed"), False)
 
     assert window.result_list.count() == 0
+    window.close()
+    app.processEvents()
+
+
+def test_split_mode_selector_returns_the_selected_mode() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(MidiExportService())
+
+    window.mode_selector.setCurrentIndex(1)
+    assert window._selected_mode() is SplitMode.TRACK
+    window.mode_selector.setCurrentIndex(2)
+    assert window._selected_mode() is SplitMode.CHANNEL
+    window.mode_selector.setCurrentIndex(0)
+    assert window._selected_mode() is SplitMode.SMART
+
     window.close()
     app.processEvents()
 

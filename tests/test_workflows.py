@@ -46,6 +46,64 @@ def test_auto_uses_channels_when_one_track_has_multiple_channels(
     assert [source.channel for source in analysis.sources] == [0, 9]
 
 
+def test_smart_split_keeps_single_channel_tracks_and_splits_mixed_tracks(
+    midi_file: Callable[..., Path],
+) -> None:
+    path = midi_file(
+        "hybrid.mid",
+        [
+            [
+                mido.MetaMessage("track_name", name="Piano"),
+                mido.Message("note_on", channel=0, note=60, velocity=100),
+            ],
+            [
+                mido.MetaMessage("track_name", name="Layer"),
+                mido.Message("note_on", channel=1, note=64, velocity=100),
+                mido.Message("note_on", channel=2, note=67, velocity=100),
+            ],
+            [
+                mido.MetaMessage("track_name", name="Drums"),
+                mido.Message("note_on", channel=9, note=36, velocity=100),
+            ],
+        ],
+    )
+
+    analysis = analyze_midi(read_midi(path), SplitMode.SMART)
+
+    assert [
+        (source.track_index, source.channel, source.name)
+        for source in analysis.sources
+    ] == [
+        (0, None, "Piano"),
+        (1, 1, "Layer - Ch 2"),
+        (1, 2, "Layer - Ch 3"),
+        (2, None, "Drums"),
+    ]
+
+
+def test_smart_split_keeps_same_channel_separate_across_tracks(
+    midi_file: Callable[..., Path],
+) -> None:
+    path = midi_file(
+        "hybrid-same-channel.mid",
+        [
+            [mido.Message("note_on", channel=0, note=60, velocity=100)],
+            [
+                mido.Message("note_on", channel=0, note=48, velocity=100),
+                mido.Message("note_on", channel=1, note=52, velocity=100),
+            ],
+        ],
+    )
+
+    analysis = analyze_midi(read_midi(path), SplitMode.SMART)
+
+    assert [(source.track_index, source.channel) for source in analysis.sources] == [
+        (0, None),
+        (1, 0),
+        (1, 1),
+    ]
+
+
 def test_channel_split_keeps_same_channel_on_different_tracks_separate(
     midi_file: Callable[..., Path],
 ) -> None:

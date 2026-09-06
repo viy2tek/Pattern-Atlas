@@ -11,6 +11,7 @@ import mido
 
 class SplitMode(StrEnum):
     AUTO = "auto"
+    SMART = "smart"
     TRACK = "track"
     CHANNEL = "channel"
 

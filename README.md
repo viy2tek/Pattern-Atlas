@@ -8,7 +8,7 @@ See the [changelog](CHANGELOG.md) for release updates.
 
 ## Features
 
-- Split Type 0 and Type 1 `.mid` and `.midi` files by track, MIDI channel, or automatically
+- Split Type 0 and Type 1 `.mid` and `.midi` files with Smart (Hybrid), track, or MIDI channel modes
 - Process multiple MIDI files or folders recursively in one batch
 - Preview, expand, select, and rename detected MIDI sources before export
 - Preserve notes, timing, tempo, and MIDI metadata
@@ -52,7 +52,7 @@ importing it.
 
 ## Split modes
 
-- **Automatic** — chooses track or channel separation based on the file structure
+- **Smart (Hybrid)** — keeps single-channel tracks together and splits multi-channel tracks by channel
 - **By Track** — creates one stem per MIDI track
 - **By MIDI Channel** — separates the channels found inside each source track and MIDI port
 
@@ -68,9 +68,9 @@ Older builds remain available on the [Releases](https://github.com/viy2tek/Patte
 ## CLI
 
 ```powershell
-midi-exporter song.mid -o output --mode auto
-midi-exporter song-01.mid song-02.mid -o output --mode auto
-midi-exporter .\midi-folder -o output --mode auto
+midi-exporter song.mid -o output --mode smart
+midi-exporter song-01.mid song-02.mid -o output --mode smart
+midi-exporter .\midi-folder -o output --mode smart
 ```
 
 ## Development

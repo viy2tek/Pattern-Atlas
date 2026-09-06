@@ -23,8 +23,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mode",
         choices=tuple(mode.value for mode in SplitMode),
-        default=SplitMode.AUTO.value,
-        help="How to split the MIDI file (default: auto)",
+        default=SplitMode.SMART.value,
+        help="How to split the MIDI file (default: smart)",
     )
     return parser
 

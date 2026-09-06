@@ -256,7 +256,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(source_card)
 
         self.mode_selector = QComboBox()
-        self.mode_selector.addItem("Automatic", SplitMode.AUTO)
+        self.mode_selector.addItem("Smart (Hybrid)", SplitMode.SMART)
         self.mode_selector.addItem("By track", SplitMode.TRACK)
         self.mode_selector.addItem("By MIDI channel", SplitMode.CHANNEL)
         self.mode_selector.setMinimumHeight(30)
@@ -778,7 +778,14 @@ class MainWindow(QMainWindow):
 
     def _selected_mode(self) -> SplitMode:
         mode = self.mode_selector.currentData()
-        return mode if isinstance(mode, SplitMode) else SplitMode.AUTO
+        if isinstance(mode, SplitMode):
+            return mode
+        if isinstance(mode, str):
+            try:
+                return SplitMode(mode)
+            except ValueError:
+                pass
+        return SplitMode.SMART
 
     @staticmethod
     def _is_valid_midi_file(path: Path) -> bool:

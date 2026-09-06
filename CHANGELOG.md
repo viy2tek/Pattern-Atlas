@@ -2,6 +2,17 @@
 
 All notable changes to Pattern Atlas are documented here.
 
+## [0.3.1] - 2026-09-06
+
+### Added
+
+- Added Smart (Hybrid) splitting: single-channel tracks stay intact while multi-channel tracks split by channel.
+
+### Changed
+
+- Renamed the default interface mode to Smart (Hybrid); the CLI keeps `--mode auto` as a compatibility alias.
+- Updated the README interface screenshot to match the current Smart (Hybrid) layout.
+
 ## [0.3.0] - 2026-09-06
 
 ### Added
@@ -24,4 +35,3 @@ All notable changes to Pattern Atlas are documented here.
 
 - Improved source naming and note-range visibility in the interface.
 - Added regression coverage for source preview, filtering, renaming, expansion, and layout bounds.
-
