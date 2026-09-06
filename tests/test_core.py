@@ -101,6 +101,22 @@ def test_metadata_from_a_non_musical_conductor_track_is_preserved_globally(
     ]
 
 
+def test_analysis_reports_source_note_range(
+    midi_file: Callable[..., Path],
+) -> None:
+    path = midi_file(
+        "range.mid",
+        [[
+            mido.Message("note_on", note=36, velocity=100),
+            mido.Message("note_on", note=84, velocity=100),
+        ]],
+    )
+
+    analysis = analyze_midi(read_midi(path), SplitMode.TRACK)
+
+    assert (analysis.sources[0].lowest_note, analysis.sources[0].highest_note) == (36, 84)
+
+
 def test_track_split_round_trip_preserves_notes_and_conductor_timing(
     midi_file: Callable[..., Path], tmp_path: Path
 ) -> None:

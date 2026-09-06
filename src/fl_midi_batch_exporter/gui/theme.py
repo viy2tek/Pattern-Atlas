@@ -142,6 +142,13 @@ QPushButton#primaryButton:pressed {{
     border-color: {COLORS['accent_pressed']};
 }}
 
+QPushButton#compactButton {{
+    min-height: 28px;
+    padding: 0 10px;
+    color: {COLORS['muted']};
+    font-size: 12px;
+}}
+
 QListWidget#resultList {{
     background: {COLORS['surface']};
     border: 1px solid {COLORS['border']};
@@ -158,5 +165,28 @@ QListWidget#resultList::item {{
 QListWidget#resultList::item:selected {{
     background: #e9f1ff;
     color: {COLORS['text']};
+}}
+
+QTableWidget#sourceTable {{
+    background: {COLORS['surface']};
+    alternate-background-color: #f8faff;
+    border: 1px solid {COLORS['border']};
+    border-radius: 7px;
+    gridline-color: {COLORS['border']};
+    padding: 2px;
+    outline: 0;
+}}
+
+QTableWidget#sourceTable QHeaderView::section {{
+    background: #f3f6fb;
+    border: 0;
+    border-bottom: 1px solid {COLORS['border']};
+    color: {COLORS['muted']};
+    font-weight: 600;
+    padding: 5px 7px;
+}}
+
+QTableWidget#sourceTable::item {{
+    padding: 4px 6px;
 }}
 """

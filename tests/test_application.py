@@ -6,7 +6,11 @@ import pytest
 
 from fl_midi_batch_exporter import application
 from fl_midi_batch_exporter.application import MidiExportService
-from fl_midi_batch_exporter.core.models import MidiExportError, SplitMode
+from fl_midi_batch_exporter.core.models import (
+    MidiExportError,
+    MidiSourceSelection,
+    SplitMode,
+)
 
 
 def _two_track_file(midi_file: Callable[..., Path]) -> Path:
@@ -157,6 +161,60 @@ def test_export_reports_each_stem_after_it_is_committed(
     )
 
     assert progress == list(result.stems)
+
+
+def test_export_can_select_and_rename_sources(
+    midi_file: Callable[..., Path], tmp_path: Path
+) -> None:
+    input_path = midi_file(
+        "song.mid",
+        [
+            [
+                mido.MetaMessage("track_name", name="Piano"),
+                mido.Message("note_on", note=60, velocity=100),
+            ],
+            [
+                mido.MetaMessage("track_name", name="Bass"),
+                mido.Message("note_on", note=48, velocity=100),
+            ],
+        ],
+    )
+    analysis = MidiExportService().analyze(input_path, SplitMode.TRACK)
+    selected = analysis.sources[1].id
+
+    result = MidiExportService().export(
+        input_path,
+        tmp_path / "stems",
+        SplitMode.TRACK,
+        selected_source_ids={selected},
+        name_overrides={selected: "Low Bass"},
+    )
+
+    assert [stem.path.name for stem in result.stems] == ["01 - Low Bass.mid"]
+
+
+def test_export_many_applies_source_selection_per_input(
+    midi_file: Callable[..., Path], tmp_path: Path
+) -> None:
+    input_path = midi_file(
+        "song.mid",
+        [
+            [mido.MetaMessage("track_name", name="Piano"), mido.Message("note_on", note=60, velocity=100)],
+            [mido.MetaMessage("track_name", name="Bass"), mido.Message("note_on", note=48, velocity=100)],
+        ],
+    )
+    analysis = MidiExportService().analyze(input_path, SplitMode.TRACK)
+    source = analysis.sources[0]
+    selection = MidiSourceSelection({source.id}, {source.id: "Main Piano"})
+
+    result = MidiExportService().export_many(
+        [input_path],
+        tmp_path / "batch",
+        SplitMode.TRACK,
+        source_selections={input_path.resolve(): selection},
+    )
+
+    assert [stem.path.name for stem in result.stems] == ["01 - Main Piano.mid"]
 
 
 def test_export_many_creates_one_output_folder_per_input(

@@ -4,6 +4,7 @@ import time
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import mido
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from fl_midi_batch_exporter.application import MidiExportService
@@ -115,5 +116,99 @@ def test_main_window_exports_multiple_midi_inputs(
     assert window.result_list.count() == 2
     assert (tmp_path / "batch-output" / "Song 01 - MIDI Stems").is_dir()
     assert (tmp_path / "batch-output" / "Song 02 - MIDI Stems").is_dir()
+    window.close()
+    app.processEvents()
+
+
+def test_main_window_previews_and_filters_sources_before_export(
+    midi_file, tmp_path
+) -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(MidiExportService())
+    window._show_message = lambda *args: None
+    input_path = midi_file(
+        "preview.mid",
+        [
+            [
+                mido.MetaMessage("track_name", name="Lead"),
+                mido.Message("note_on", note=60, velocity=100),
+            ],
+            [
+                mido.MetaMessage("track_name", name="Bass"),
+                mido.Message("note_on", note=48, velocity=100),
+            ],
+        ],
+    )
+
+    window.load_file(input_path)
+    deadline = time.monotonic() + 5
+    while window._is_busy and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+
+    assert window.source_table.rowCount() == 2
+    assert window.source_table.item(0, 0).checkState().name == "Checked"
+    assert window.source_table.item(0, 2).text() == "Lead"
+    assert window.source_table.item(0, 5).text() == "1"
+    assert window.source_table.item(0, 6).text() == "C4"
+
+    window.source_table.item(0, 2).setText("Lead Main")
+    window.source_table.item(0, 0).setCheckState(Qt.CheckState.Unchecked)
+    window.source_table.item(1, 0).setCheckState(Qt.CheckState.Unchecked)
+    assert window.export_button.isEnabled() is False
+    window.source_table.item(0, 0).setCheckState(Qt.CheckState.Checked)
+    window.source_table.item(1, 0).setCheckState(Qt.CheckState.Unchecked)
+    window.output_dir_input.setText(str(tmp_path / "stems"))
+    window._export()
+
+    deadline = time.monotonic() + 5
+    while window._is_busy and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+
+    assert window.result_list.count() == 1
+    assert (tmp_path / "stems" / "01 - Lead Main.mid").exists()
+    window.close()
+    app.processEvents()
+
+
+def test_source_preview_can_expand_and_collapse() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(MidiExportService())
+
+    assert window.source_expand_button.text() == "Expand"
+    assert window._source_preview_expanded is False
+
+    window.source_expand_button.click()
+    app.processEvents()
+
+    assert window.source_expand_button.text() == "Collapse"
+    assert window._source_preview_expanded is True
+    assert window._action_widget.isHidden() is True
+    assert window._split_widget.isHidden() is True
+    assert window.result_card.isHidden() is True
+    assert window.source_table.maximumHeight() > 174
+
+    window.source_expand_button.click()
+    app.processEvents()
+
+    assert window.source_expand_button.text() == "Expand"
+    assert window._source_preview_expanded is False
+    assert window._action_widget.isHidden() is False
+    assert window._split_widget.isHidden() is False
+    assert window.result_card.isHidden() is False
+    assert window.source_table.maximumHeight() == 174
+    window.close()
+    app.processEvents()
+
+
+def test_exported_files_card_stays_inside_the_content_surface() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(MidiExportService())
+    window.show()
+    app.processEvents()
+
+    assert window.result_card.geometry().bottom() <= window._content_surface.rect().bottom()
+
     window.close()
     app.processEvents()

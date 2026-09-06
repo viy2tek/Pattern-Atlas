@@ -140,6 +140,7 @@ def _make_source(
     name = _source_name(track, track_index, channel)
     source_id = f"t{track_index}-p{port if port is not None else 'none'}-c{channel if channel is not None else 'all'}"
     note_events = tuple(event for event in events if is_note_on(event))
+    note_values = tuple(event.message.note for event in note_events)
     return MidiSource(
         source_id,
         track_index,
@@ -150,6 +151,8 @@ def _make_source(
         len(note_events),
         min(event.tick for event in events),
         max(event.tick for event in events),
+        lowest_note=min(note_values) if note_values else None,
+        highest_note=max(note_values) if note_values else None,
     )
 
 

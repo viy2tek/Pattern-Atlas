@@ -8,6 +8,7 @@ Offline Windows MIDI exporter for splitting one or many Standard MIDI Files into
 
 - Split Type 0 and Type 1 `.mid` and `.midi` files by track, MIDI channel, or automatically
 - Process multiple MIDI files or folders recursively in one batch
+- Preview, expand, select, and rename detected MIDI sources before export
 - Preserve notes, timing, tempo, and MIDI metadata
 - Export each detected source as a separate `.mid` file
 - Prevent incomplete output files when an export is interrupted
@@ -18,8 +19,10 @@ Offline Windows MIDI exporter for splitting one or many Standard MIDI Files into
 
 1. Open Pattern Atlas.
 2. Browse for one or more MIDI files, or drop files/folders into the window.
-3. Choose an output folder and split mode.
-4. Click **Export MIDI Stems**.
+3. Review the detected sources; uncheck any source you do not want and rename
+   sources by double-clicking their name.
+4. Choose an output folder and split mode.
+5. Click **Export MIDI Stems**.
 
 For a batch, each input receives its own folder below the selected output root,
 such as `Song 01 - MIDI Stems` and `Song 02 - MIDI Stems`. Folders are scanned

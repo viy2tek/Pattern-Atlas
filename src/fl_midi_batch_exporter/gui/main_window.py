@@ -18,15 +18,20 @@ from PySide6.QtGui import (
     QResizeEvent,
 )
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -38,6 +43,8 @@ from ..core.models import (
     MidiBatchResult,
     MidiExportError,
     MidiProjectAnalysis,
+    MidiSource,
+    MidiSourceSelection,
     SplitMode,
 )
 from .drop_zone import MIDI_SUFFIXES, DragOverlay, DropZone
@@ -46,6 +53,7 @@ from .result_list import ResultList
 from .theme import APP_STYLESHEET
 
 logger = logging.getLogger(__name__)
+_NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
 
 class _ServiceWorker(QObject):
@@ -98,6 +106,7 @@ class MainWindow(QMainWindow):
         self._thread: QThread | None = None
         self._worker: _ServiceWorker | None = None
         self._is_busy = False
+        self._source_preview_expanded = False
 
         self.setWindowTitle("Pattern Atlas")
         self.setWindowIcon(svg_icon("waveform", "#2f73df", 24))
@@ -191,6 +200,61 @@ class MainWindow(QMainWindow):
         input_layout.addWidget(self.browse_button)
         layout.addLayout(input_layout)
 
+        source_card = QFrame()
+        source_card.setObjectName("surface")
+        source_card_layout = QVBoxLayout(source_card)
+        source_card_layout.setContentsMargins(10, 7, 10, 7)
+        source_card_layout.setSpacing(4)
+        source_header = QHBoxLayout()
+        source_header.setContentsMargins(0, 0, 0, 0)
+        source_title = QLabel("MIDI sources")
+        source_title.setObjectName("sectionTitle")
+        source_header.addWidget(source_title)
+        source_header.addStretch()
+        self.source_expand_button = QPushButton("Expand")
+        self.source_expand_button.setObjectName("compactButton")
+        self.source_expand_button.setMinimumHeight(28)
+        self.source_expand_button.clicked.connect(self._toggle_source_preview)
+        source_header.addWidget(self.source_expand_button)
+        source_card_layout.addLayout(source_header)
+        self.source_table = QTableWidget(0, 7)
+        self.source_table.setObjectName("sourceTable")
+        self.source_table.setHorizontalHeaderLabels(
+            ["Use", "File", "Source", "Track", "Channel", "Notes", "Range"]
+        )
+        self.source_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.NoSelection
+        )
+        self.source_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.DoubleClicked
+            | QAbstractItemView.EditTrigger.EditKeyPressed
+        )
+        self.source_table.setAlternatingRowColors(True)
+        self.source_table.verticalHeader().setVisible(False)
+        self.source_table.horizontalHeader().setStretchLastSection(True)
+        self.source_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.source_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.Stretch
+        )
+        self.source_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeMode.Stretch
+        )
+        for column in (3, 4, 5):
+            self.source_table.horizontalHeader().setSectionResizeMode(
+                column, QHeaderView.ResizeMode.ResizeToContents
+            )
+        self.source_table.setMinimumHeight(128)
+        self.source_table.setMaximumHeight(174)
+        self.source_table.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.source_table.itemChanged.connect(self._source_item_changed)
+        source_card_layout.addWidget(self.source_table)
+        self.source_card = source_card
+        layout.addWidget(source_card)
+
         self.mode_selector = QComboBox()
         self.mode_selector.addItem("Automatic", SplitMode.AUTO)
         self.mode_selector.addItem("By track", SplitMode.TRACK)
@@ -213,8 +277,12 @@ class MainWindow(QMainWindow):
         self.export_button.setMinimumHeight(58)
         self.export_button.clicked.connect(self._export)
         action_layout.addWidget(self.export_button, 1)
-        layout.addLayout(action_layout)
-        layout.addLayout(split_layout)
+        self._action_widget = QWidget()
+        self._action_widget.setLayout(action_layout)
+        layout.addWidget(self._action_widget)
+        self._split_widget = QWidget()
+        self._split_widget.setLayout(split_layout)
+        layout.addWidget(self._split_widget)
 
         result_card = QFrame()
         result_card.setObjectName("surface")
@@ -305,6 +373,20 @@ class MainWindow(QMainWindow):
             self.drag_overlay.raise_()
         self.drag_overlay.setVisible(visible)
 
+    @Slot()
+    def _toggle_source_preview(self) -> None:
+        """Expand or restore the source table without changing its data."""
+        self._source_preview_expanded = not self._source_preview_expanded
+        expanded = self._source_preview_expanded
+        self.source_expand_button.setText("Collapse" if expanded else "Expand")
+        self._action_widget.setVisible(not expanded)
+        self._split_widget.setVisible(not expanded)
+        self.result_card.setVisible(not expanded)
+        self.source_table.setMaximumHeight(16777215 if expanded else 174)
+        self._main_layout.setStretchFactor(self.source_card, 1 if expanded else 0)
+        self._main_layout.setStretchFactor(self.result_card, 0 if expanded else 1)
+        self._update_result_height()
+
     def _update_result_height(self) -> None:
         """Keep the result panel proportional to the reference viewport."""
         if hasattr(self, "result_card"):
@@ -314,7 +396,10 @@ class MainWindow(QMainWindow):
             self._info_widget.setFixedHeight(max(40, int(52 * scale)))
             self.output_card.setFixedHeight(max(86, int(102 * scale)))
             self.export_button.setMinimumHeight(max(42, int(58 * scale)))
-            self.result_card.setMinimumHeight(max(250, int(self.height() * 0.38)))
+            if self._source_preview_expanded:
+                self.result_card.setMinimumHeight(0)
+            else:
+                self.result_card.setMinimumHeight(max(230, int(self.height() * 0.34)))
             self._main_layout.invalidate()
 
     def _info_row(self, icon: str, title: str, value: QLabel) -> QHBoxLayout:
@@ -329,6 +414,119 @@ class MainWindow(QMainWindow):
         value.setObjectName("mutedText")
         row.addWidget(value, 1)
         return row
+
+    def _populate_source_table(
+        self, analyses: tuple[tuple[Path, MidiProjectAnalysis], ...]
+    ) -> None:
+        """Show every detected source with selection and rename controls."""
+        rows = [
+            (path, source)
+            for path, analysis in analyses
+            for source in analysis.sources
+        ]
+        self.source_table.blockSignals(True)
+        try:
+            self.source_table.setRowCount(len(rows))
+            for row, (path, source) in enumerate(rows):
+                use_item = QTableWidgetItem()
+                use_item.setFlags(
+                    Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable
+                )
+                use_item.setCheckState(Qt.CheckState.Checked)
+                use_item.setData(Qt.ItemDataRole.UserRole, path)
+                use_item.setData(Qt.ItemDataRole.UserRole + 1, source.id)
+                use_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.source_table.setItem(row, 0, use_item)
+
+                file_item = QTableWidgetItem(path.name)
+                file_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                self.source_table.setItem(row, 1, file_item)
+
+                source_item = QTableWidgetItem(source.name)
+                source_item.setFlags(
+                    Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable
+                )
+                source_item.setData(Qt.ItemDataRole.UserRole, source.name)
+                self.source_table.setItem(row, 2, source_item)
+
+                self.source_table.setItem(
+                    row, 3, self._read_only_item(f"Track {source.track_index + 1}")
+                )
+                channel = "—" if source.channel is None else f"Ch {source.channel + 1}"
+                self.source_table.setItem(row, 4, self._read_only_item(channel))
+                self.source_table.setItem(
+                    row, 5, self._read_only_item(str(source.note_count))
+                )
+                self.source_table.setItem(
+                    row, 6, self._read_only_item(self._format_note_range(source))
+                )
+        finally:
+            self.source_table.blockSignals(False)
+        self._update_controls()
+
+    @staticmethod
+    def _read_only_item(text: str) -> QTableWidgetItem:
+        """Create a non-editable table cell."""
+        item = QTableWidgetItem(text)
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        return item
+
+    @staticmethod
+    def _format_note_range(source: MidiSource) -> str:
+        """Format a source's lowest and highest MIDI note as note names."""
+        if source.lowest_note is None or source.highest_note is None:
+            return "—"
+        lowest = MainWindow._format_note(source.lowest_note)
+        highest = MainWindow._format_note(source.highest_note)
+        return lowest if lowest == highest else f"{lowest}–{highest}"
+
+    @staticmethod
+    def _format_note(note: int) -> str:
+        """Convert a MIDI note number to scientific pitch notation."""
+        return f"{_NOTE_NAMES[note % 12]}{note // 12 - 1}"
+
+    def _selected_source_selections(self) -> dict[Path, MidiSourceSelection]:
+        """Return the current checkboxes and renamed source values."""
+        selected: dict[Path, set[str]] = {}
+        overrides: dict[Path, dict[str, str]] = {}
+        for row in range(self.source_table.rowCount()):
+            use_item = self.source_table.item(row, 0)
+            source_item = self.source_table.item(row, 2)
+            if use_item is None or source_item is None:
+                continue
+            path = use_item.data(Qt.ItemDataRole.UserRole)
+            source_id = use_item.data(Qt.ItemDataRole.UserRole + 1)
+            if not isinstance(path, Path) or not isinstance(source_id, str):
+                continue
+            selected.setdefault(path, set())
+            overrides.setdefault(path, {})
+            if use_item.checkState() == Qt.CheckState.Checked:
+                selected[path].add(source_id)
+            original_name = source_item.data(Qt.ItemDataRole.UserRole)
+            current_name = source_item.text().strip()
+            if (
+                isinstance(original_name, str)
+                and current_name
+                and current_name != original_name
+            ):
+                overrides[path][source_id] = current_name
+        return {
+            path: MidiSourceSelection(ids, overrides[path])
+            for path, ids in selected.items()
+        }
+
+    def _has_selected_sources(self) -> bool:
+        """Return whether at least one source is currently checked."""
+        return any(
+            self.source_table.item(row, 0) is not None
+            and self.source_table.item(row, 0).checkState() == Qt.CheckState.Checked
+            for row in range(self.source_table.rowCount())
+        )
+
+    def _source_item_changed(self, _: QTableWidgetItem) -> None:
+        """Refresh export availability after a source checkbox changes."""
+        self._update_controls()
 
     @Slot()
     def _browse_for_file(self) -> None:
@@ -371,6 +569,7 @@ class MainWindow(QMainWindow):
         self.status_label.setText("Analyzing MIDI…")
         self.output_dir_input.setText(str(self._default_output_directory(requested)))
         self.result_list.clear()
+        self.source_table.setRowCount(0)
         self._update_controls()
 
         mode = self._selected_mode()
@@ -431,15 +630,32 @@ class MainWindow(QMainWindow):
 
         output_dir = Path(output_text)
         mode = self._selected_mode()
+        selections = self._selected_source_selections()
         self.status_label.setText("Exporting MIDI stems…")
         self.result_list.clear()
-        if len(self._input_paths) == 1:
+        direct_single_file = (
+            len(self._input_paths) == 1
+            and self._input_paths[0].is_file()
+            and len(self._analyses) == 1
+        )
+        if direct_single_file:
+            input_path = self._analyses[0][0]
+            selection = selections.get(input_path, MidiSourceSelection())
             operation = lambda progress: self.service.export(
-                self._input_paths[0], output_dir, mode, on_stem=progress
+                input_path,
+                output_dir,
+                mode,
+                on_stem=progress,
+                selected_source_ids=selection.source_ids,
+                name_overrides=selection.name_overrides,
             )
         else:
             operation = lambda progress: self.service.export_many(
-                self._input_paths, output_dir, mode, on_stem=progress
+                self._input_paths,
+                output_dir,
+                mode,
+                on_stem=progress,
+                source_selections=selections,
             )
         self._start_worker(
             operation,
@@ -467,6 +683,7 @@ class MainWindow(QMainWindow):
         else:
             self.source_label.setText(f"{len(analyses)} MIDI files selected")
         self.detected_label.setText(f"{source_count} MIDI sources")
+        self._populate_source_table(analyses)
         self.status_label.setText("Ready to export.")
         self._update_controls()
 
@@ -536,6 +753,8 @@ class MainWindow(QMainWindow):
         if clear_analysis_on_failure:
             self.detected_label.setText("No MIDI sources detected")
             self._analysis = None
+            self._analyses = ()
+            self.source_table.setRowCount(0)
         self.status_label.setText("Could not finish operation.")
         self._show_message("Could not finish operation", message, QMessageBox.Icon.Critical)
 
@@ -550,7 +769,9 @@ class MainWindow(QMainWindow):
         can_select_input = not self._is_busy
         self.browse_button.setEnabled(can_select_input)
         self.mode_selector.setEnabled(can_select_input)
-        self.export_button.setEnabled(bool(self._analyses) and not self._is_busy)
+        self.export_button.setEnabled(
+            bool(self._analyses) and self._has_selected_sources() and not self._is_busy
+        )
         self.open_folder_button.setEnabled(
             self._last_output_dir is not None and not self._is_busy
         )

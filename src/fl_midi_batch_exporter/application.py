@@ -1,6 +1,6 @@
 """Application service that composes the MIDI export core."""
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 
 from .core.analyzer import analyze_midi
@@ -11,6 +11,7 @@ from .core.models import (
     MidiBatchResult,
     MidiExportError,
     MidiProjectAnalysis,
+    MidiSourceSelection,
     SplitMode,
 )
 from .core.naming import reserve_output_path, suggest_stem_name
@@ -34,6 +35,8 @@ class MidiExportService:
         output_dir: Path,
         mode: SplitMode = SplitMode.AUTO,
         on_stem: Callable[[ExportedStem], None] | None = None,
+        selected_source_ids: Iterable[str] | None = None,
+        name_overrides: Mapping[str, str] | None = None,
     ) -> ExportResult:
         """Export all detected sources, creating *output_dir* when needed."""
         analysis = self.analyze(input_path, mode)
@@ -46,7 +49,13 @@ class MidiExportService:
                 f"Could not create the output folder '{output_dir}'. "
                 "Choose a writable folder and try again."
             ) from error
-        return export_all_stems(analysis, output_dir, on_stem=on_stem)
+        return export_all_stems(
+            analysis,
+            output_dir,
+            on_stem=on_stem,
+            selected_source_ids=selected_source_ids,
+            name_overrides=name_overrides,
+        )
 
     @staticmethod
     def collect_midi_inputs(
@@ -86,6 +95,7 @@ class MidiExportService:
         mode: SplitMode = SplitMode.AUTO,
         on_stem: Callable[[ExportedStem], None] | None = None,
         on_file: Callable[[MidiBatchItem], None] | None = None,
+        source_selections: Mapping[Path, MidiSourceSelection] | None = None,
     ) -> MidiBatchResult:
         """Export each MIDI input into its own folder below *output_root*."""
         try:
@@ -108,7 +118,15 @@ class MidiExportService:
                 )
                 suffix += 1
             used_output_dirs.add(output_dir)
-            result = self.export(input_path, output_dir, mode, on_stem=on_stem)
+            selection = (source_selections or {}).get(input_path)
+            result = self.export(
+                input_path,
+                output_dir,
+                mode,
+                on_stem=on_stem,
+                selected_source_ids=selection.source_ids if selection else None,
+                name_overrides=selection.name_overrides if selection else None,
+            )
             item = MidiBatchItem(input_path, output_dir, result)
             items.append(item)
             if on_file is not None:
@@ -120,16 +138,25 @@ def export_all_stems(
     analysis: MidiProjectAnalysis,
     output_dir: Path,
     on_stem: Callable[[ExportedStem], None] | None = None,
+    selected_source_ids: Iterable[str] | None = None,
+    name_overrides: Mapping[str, str] | None = None,
 ) -> ExportResult:
     """Write every non-empty source from *analysis* into *output_dir*."""
     stems: list[ExportedStem] = []
+    selected = frozenset(selected_source_ids) if selected_source_ids is not None else None
+    overrides = name_overrides or {}
     owned_outputs: list[tuple[Path, OutputFileIdentity]] = []
     try:
         for number, source in enumerate(analysis.sources, start=1):
+            if selected is not None and source.id not in selected:
+                continue
             events = events_for_source(analysis, source)
             if not events:
                 continue
-            path = reserve_output_path(output_dir, suggest_stem_name(source, number))
+            path = reserve_output_path(
+                output_dir,
+                suggest_stem_name(source, len(stems) + 1, overrides.get(source.id)),
+            )
             write_stem(
                 path,
                 analysis,

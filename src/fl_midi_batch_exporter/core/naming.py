@@ -13,9 +13,11 @@ def _safe_name(value: str) -> str:
     return cleaned.rstrip(" .")
 
 
-def suggest_stem_name(source: MidiSource, number: int) -> str:
+def suggest_stem_name(
+    source: MidiSource, number: int, name_override: str | None = None
+) -> str:
     """Return a stable numbered MIDI filename for *source*."""
-    name = _safe_name(source.name)
+    name = _safe_name(name_override if name_override is not None else source.name)
     if not name:
         if source.channel is not None:
             name = f"Track {source.track_index + 1:02d} - Ch {source.channel + 1:02d}"

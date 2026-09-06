@@ -36,6 +36,8 @@ class MidiSource:
     first_tick: int
     last_tick: int
     suggested_filename: str = ""
+    lowest_note: int | None = None
+    highest_note: int | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,22 @@ class ExportedStem:
 class ExportResult:
     stems: tuple[ExportedStem, ...]
     total_notes: int = 0
+
+
+@dataclass(frozen=True)
+class MidiSourceSelection:
+    """Optional source filter and display-name overrides for one input."""
+
+    source_ids: frozenset[str] | None = None
+    name_overrides: Mapping[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Freeze caller-provided selection collections."""
+        if self.source_ids is not None:
+            object.__setattr__(self, "source_ids", frozenset(self.source_ids))
+        object.__setattr__(
+            self, "name_overrides", MappingProxyType(dict(self.name_overrides))
+        )
 
 
 @dataclass(frozen=True)
