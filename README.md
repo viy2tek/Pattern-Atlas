@@ -74,18 +74,16 @@ Releases are created automatically when a bare SemVer tag is pushed:
 
 Tags such as `v0.3.2` or `Pattern-Atlas 0.3.2` are rejected. The workflow
 generates customer-facing release notes from the complete diff since the
-previous tag, builds and signs the Windows executable, and publishes a SHA-256
-checksum beside it.
+previous tag, builds the Windows executable, and publishes a SHA-256 checksum
+beside it. The checksum verifies file integrity; it does not remove Windows
+SmartScreen warnings or establish publisher trust.
 
 Repository maintainers must configure these GitHub Actions secrets:
 
 - `GEMINI_API_KEY` for `gemini-3.5-flash-lite` release-note generation.
-- `WINDOWS_SIGNING_CERTIFICATE_BASE64` containing the base64-encoded Windows
-  Authenticode PFX certificate.
-- `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` containing the PFX password.
 
-The signing certificate uses SHA-256 for the executable signature and the
-published checksum lets users verify that their downloaded file is intact.
+The published `.sha256` file lets users verify that their downloaded file is
+identical to the one produced by the workflow.
 
 ## CLI
 

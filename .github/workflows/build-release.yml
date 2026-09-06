@@ -69,8 +69,6 @@ jobs:
       RELEASE_VERSION: ${{ needs.validate.outputs.version }}
       PREVIOUS_TAG: ${{ needs.validate.outputs.previous_tag }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
-      WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -261,25 +259,12 @@ jobs:
         shell: pwsh
         run: .\build.ps1
 
-      - name: Sign and checksum release asset
+      - name: Generate SHA-256 checksum
         id: asset
         shell: pwsh
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)) {
-              throw 'Windows signing secrets are required: WINDOWS_SIGNING_CERTIFICATE_BASE64 and WINDOWS_SIGNING_CERTIFICATE_PASSWORD.'
-          }
-
           $source = Join-Path $env:GITHUB_WORKSPACE 'dist\Pattern Atlas.exe'
           if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "Build output not found: $source" }
-          $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction Stop | Sort-Object FullName -Descending | Select-Object -First 1
-          if ($null -eq $signtool) { throw 'signtool.exe was not found on the Windows runner.' }
-
-          $certificatePath = Join-Path $env:RUNNER_TEMP 'pattern-atlas-signing.pfx'
-          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERTIFICATE_BASE64))
-          & $signtool.FullName sign /fd SHA256 /f $certificatePath /p $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD /tr 'http://timestamp.digicert.com' /td SHA256 $source
-          if ($LASTEXITCODE -ne 0) { throw 'Authenticode signing failed.' }
-          & $signtool.FullName verify /pa /all $source
-          if ($LASTEXITCODE -ne 0) { throw 'Authenticode signature verification failed.' }
 
           $assetName = "Pattern-Atlas-$env:RELEASE_TAG-Windows-x64.exe"
           $assetPath = Join-Path $env:GITHUB_WORKSPACE "dist\$assetName"

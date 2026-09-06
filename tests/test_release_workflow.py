@@ -38,13 +38,12 @@ def test_workflow_uses_required_gemini_model_and_retry_policy():
     assert "git diff --binary \"$previousTag...$tag\"" in WORKFLOW
 
 
-def test_workflow_requires_sha256_signing_and_checksum():
-    assert "WINDOWS_SIGNING_CERTIFICATE_BASE64" in WORKFLOW
-    assert "WINDOWS_SIGNING_CERTIFICATE_PASSWORD" in WORKFLOW
-    assert "/fd SHA256" in WORKFLOW
-    assert "/td SHA256" in WORKFLOW
-    assert "signtool.FullName verify /pa /all" in WORKFLOW
+def test_workflow_generates_sha256_checksum_without_code_signing_secrets():
+    assert "Generate SHA-256 checksum" in WORKFLOW
+    assert "Get-FileHash -LiteralPath $assetPath -Algorithm SHA256" in WORKFLOW
     assert ".sha256" in WORKFLOW
+    assert "WINDOWS_SIGNING_CERTIFICATE_BASE64" not in WORKFLOW
+    assert "WINDOWS_SIGNING_CERTIFICATE_PASSWORD" not in WORKFLOW
 
 
 def test_workflow_updates_supported_version_metadata():
