@@ -60,7 +60,7 @@ importing it.
 
 Download the latest portable Windows executable from the [latest release](https://github.com/viy2tek/Pattern-Atlas/releases/latest).
 
-1. Download `Pattern-Atlas-vX.Y.Z-Windows-x64.exe` from the release assets.
+1. Download `Pattern-Atlas-X.Y.Z-Windows-x64.exe` from the release assets.
 2. Open the executable directly. No installer or Python installation is required.
 
 Older builds remain available on the [Releases](https://github.com/viy2tek/Pattern-Atlas/releases) page.
@@ -83,3 +83,18 @@ python -m pytest
 ```
 
 Diagnostic logs are stored in `%LOCALAPPDATA%\Pattern Atlas\logs`.
+
+## Publishing a Windows release
+
+1. Update the version in `pyproject.toml` and `src/fl_midi_batch_exporter/__init__.py` to the same SemVer value, for example `0.3.2`.
+2. Add a `## [0.3.2] - YYYY-MM-DD` section to `CHANGELOG.md`; that section becomes the GitHub Release notes.
+3. Commit and push the release changes to `master`, then create and push an annotated tag with no `v` prefix:
+
+   ```powershell
+   git tag -a 0.3.2 -m "Release 0.3.2"
+   git push origin 0.3.2
+   ```
+
+4. The **Build Windows release** workflow validates the exact `X.Y.Z` tag and package version, builds `Pattern Atlas.exe`, uploads `Pattern-Atlas-X.Y.Z-Windows-x64.exe` as a 30-day Actions artifact, and publishes that executable with the changelog notes as a GitHub Release.
+
+Use **Run workflow** only for an unpublished build artifact. Supplying a tag there does not create a release.

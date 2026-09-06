@@ -3,11 +3,11 @@ name: Build Windows release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "*.*.*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Semantic version tag to build (for example, v0.2.0)"
+        description: "Semantic version tag to build (for example, 0.3.2)"
         required: false
         type: string
 
@@ -52,16 +52,17 @@ jobs:
               $tag = "manual-${{ github.run_number }}"
           }
 
-          if ($tag -notmatch '^v\d+\.\d+\.\d+$' -and $env:EVENT_NAME -eq "push") {
-              throw "Tag '$tag' is not a semantic version (expected vX.Y.Z)."
+          $requiresSemVer = $env:EVENT_NAME -eq "push" -or -not [string]::IsNullOrWhiteSpace($env:INPUT_TAG)
+          if ($tag -notmatch '^\d+\.\d+\.\d+$' -and $requiresSemVer) {
+              throw "Tag '$tag' is not a semantic version (expected X.Y.Z without a v prefix)."
           }
 
-          $version = $tag.TrimStart('v')
+          $version = $tag
           "tag=$tag" >> $env:GITHUB_OUTPUT
           "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Verify package version for release builds
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || inputs.tag != ''
         shell: pwsh
         env:
           EXPECTED_VERSION: ${{ steps.metadata.outputs.version }}
@@ -98,11 +99,12 @@ jobs:
 
       - name: Prepare changelog notes
         id: notes
+        if: github.event_name == 'push'
         shell: pwsh
         env:
           RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         run: |
-          $version = $env:RELEASE_TAG.TrimStart('v')
+          $version = $env:RELEASE_TAG
           $changelogPath = Join-Path $env:GITHUB_WORKSPACE "CHANGELOG.md"
           if (-not (Test-Path -LiteralPath $changelogPath -PathType Leaf)) {
               throw "CHANGELOG.md was not found. Add release notes before publishing."
