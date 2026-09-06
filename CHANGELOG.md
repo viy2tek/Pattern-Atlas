@@ -2,17 +2,6 @@
 
 All notable changes to Pattern Atlas are documented here.
 
-## [0.3.2] - 2026-09-06
-
-### Changed
-
-- GitHub releases now publish from `X.Y.Z` SemVer tags without a `v` prefix.
-- Windows release assets now use the matching `Pattern-Atlas-X.Y.Z-Windows-x64.exe` name.
-
-### Fixed
-
-- The release workflow now verifies the unprefixed tag against the package version before publishing.
-
 ## [0.3.1] - 2026-09-06
 
 ### Added
@@ -23,6 +12,7 @@ All notable changes to Pattern Atlas are documented here.
 
 - Renamed the default interface mode to Smart (Hybrid); the CLI keeps `--mode auto` as a compatibility alias.
 - Updated the README interface screenshot to match the current Smart (Hybrid) layout.
+- Updated the Windows distribution workflow to validate the package version before publishing its release asset.
 
 ## [0.3.0] - 2026-09-06
 

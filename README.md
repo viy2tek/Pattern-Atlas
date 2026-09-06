@@ -60,7 +60,7 @@ importing it.
 
 Download the latest portable Windows executable from the [latest release](https://github.com/viy2tek/Pattern-Atlas/releases/latest).
 
-1. Download `Pattern-Atlas-X.Y.Z-Windows-x64.exe` from the release assets.
+1. Download `Pattern-Atlas-vX.Y.Z-Windows-x64.exe` from the release assets.
 2. Open the executable directly. No installer or Python installation is required.
 
 Older builds remain available on the [Releases](https://github.com/viy2tek/Pattern-Atlas/releases) page.
