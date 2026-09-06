@@ -22,6 +22,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Python
@@ -96,40 +97,75 @@ jobs:
           Write-Host "Asset: $assetName"
           Write-Host "SHA-256: $hash"
 
-      - name: Prepare changelog notes
+      - name: Generate release notes from commits
         id: notes
         shell: pwsh
         env:
           RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         run: |
-          $version = $env:RELEASE_TAG.TrimStart('v')
-          $changelogPath = Join-Path $env:GITHUB_WORKSPACE "CHANGELOG.md"
-          if (-not (Test-Path -LiteralPath $changelogPath -PathType Leaf)) {
-              throw "CHANGELOG.md was not found. Add release notes before publishing."
+          $tag = $env:RELEASE_TAG
+          $allTags = @(git tag --list 'v*.*.*' --sort=-version:refname)
+          $previousTag = $allTags | Where-Object { $_ -ne $tag } | Select-Object -First 1
+          if ([string]::IsNullOrWhiteSpace($previousTag)) {
+              $range = $tag
+          } else {
+              $range = "$previousTag..$tag"
           }
 
-          $lines = @(Get-Content -LiteralPath $changelogPath)
-          $start = -1
-          for ($index = 0; $index -lt $lines.Count; $index++) {
-              if ($lines[$index] -match "^## \[$([regex]::Escape($version))\]") {
-                  $start = $index
-                  break
+          $categories = [ordered]@{
+              Added = [System.Collections.Generic.List[string]]::new()
+              Changed = [System.Collections.Generic.List[string]]::new()
+              Fixed = [System.Collections.Generic.List[string]]::new()
+              Improved = [System.Collections.Generic.List[string]]::new()
+          }
+
+          $commitLines = @(git log --no-merges --format='%H%x09%s' $range)
+          foreach ($line in $commitLines) {
+              if ([string]::IsNullOrWhiteSpace($line)) { continue }
+              $parts = $line -split "`t", 2
+              $subject = if ($parts.Count -gt 1) { $parts[1].Trim() } else { $parts[0].Trim() }
+              if ($subject -match '^(?:chore|ci|docs|test|style|build)(?:\([^)]*\))?:') { continue }
+
+              $category = 'Changed'
+              if ($subject -match '^(feat)(?:\([^)]*\))?!?:\s*(.+)$') {
+                  $category = 'Added'
+                  $subject = $Matches[2].Trim()
+              } elseif ($subject -match '^(fix)(?:\([^)]*\))?!?:\s*(.+)$') {
+                  $category = 'Fixed'
+                  $subject = $Matches[2].Trim()
+              } elseif ($subject -match '^(perf)(?:\([^)]*\))?!?:\s*(.+)$') {
+                  $category = 'Improved'
+                  $subject = $Matches[2].Trim()
+              } elseif ($subject -match '^(?:refactor|ui)(?:\([^)]*\))?!?:\s*(.+)$') {
+                  $subject = $Matches[1].Trim()
+              } elseif ($subject -match '^[a-z]+(?:\([^)]*\))?!?:\s*(.+)$') {
+                  $subject = $Matches[1].Trim()
+              }
+
+              if (-not [string]::IsNullOrWhiteSpace($subject)) {
+                  $categories[$category].Add("- $subject")
               }
           }
-          if ($start -lt 0) {
-              throw "CHANGELOG.md has no section for [$version]."
-          }
 
-          $end = $lines.Count
-          for ($index = $start + 1; $index -lt $lines.Count; $index++) {
-              if ($lines[$index] -match '^## \[') {
-                  $end = $index
-                  break
-              }
+          $notes = [System.Collections.Generic.List[string]]::new()
+          $notes.Add('## Changelog')
+          $notes.Add('')
+          foreach ($category in $categories.Keys) {
+              if ($categories[$category].Count -eq 0) { continue }
+              $notes.Add("### $category")
+              $notes.Add('')
+              $categories[$category] | ForEach-Object { $notes.Add($_) }
+              $notes.Add('')
           }
-
+          if ($notes.Count -eq 2) {
+              $notes.Add('No user-facing changes were recorded.')
+              $notes.Add('')
+          }
+          if (-not [string]::IsNullOrWhiteSpace($previousTag)) {
+              $notes.Add("Full Changelog: https://github.com/${{ github.repository }}/compare/$previousTag...$tag")
+          }
           $notesPath = Join-Path $env:RUNNER_TEMP "release-notes.md"
-          Set-Content -LiteralPath $notesPath -Value ($lines[$start..($end - 1)] -join [Environment]::NewLine) -Encoding utf8
+          Set-Content -LiteralPath $notesPath -Value ($notes -join [Environment]::NewLine) -Encoding utf8
           "body_path=$notesPath" >> $env:GITHUB_OUTPUT
 
       - name: Upload build artifact
