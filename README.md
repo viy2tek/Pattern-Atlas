@@ -2,7 +2,7 @@
 
 Offline Windows MIDI exporter for splitting one or many Standard MIDI Files into organized stems.
 
-See the [changelog](CHANGELOG.md) for release updates.
+See the [release notes](https://github.com/viy2tek/Pattern-Atlas/releases) for updates.
 
 ![Pattern Atlas interface](docs/pattern-atlas-interface.png)
 
@@ -60,10 +60,32 @@ importing it.
 
 Download the latest portable Windows executable from the [latest release](https://github.com/viy2tek/Pattern-Atlas/releases/latest).
 
-1. Download `Pattern-Atlas-vX.Y.Z-Windows-x64.exe` from the release assets.
+1. Download `Pattern-Atlas-X.Y.Z-Windows-x64.exe` from the release assets.
 2. Open the executable directly. No installer or Python installation is required.
 
 Older builds remain available on the [Releases](https://github.com/viy2tek/Pattern-Atlas/releases) page.
+
+## Release automation
+
+Releases are created automatically when a bare SemVer tag is pushed:
+
+- Stable: `0.3.2`
+- Pre-release: `0.3.2-beta.1`
+
+Tags such as `v0.3.2` or `Pattern-Atlas 0.3.2` are rejected. The workflow
+generates customer-facing release notes from the complete diff since the
+previous tag, builds and signs the Windows executable, and publishes a SHA-256
+checksum beside it.
+
+Repository maintainers must configure these GitHub Actions secrets:
+
+- `GEMINI_API_KEY` for `gemini-3.5-flash-lite` release-note generation.
+- `WINDOWS_SIGNING_CERTIFICATE_BASE64` containing the base64-encoded Windows
+  Authenticode PFX certificate.
+- `WINDOWS_SIGNING_CERTIFICATE_PASSWORD` containing the PFX password.
+
+The signing certificate uses SHA-256 for the executable signature and the
+published checksum lets users verify that their downloaded file is intact.
 
 ## CLI
 
