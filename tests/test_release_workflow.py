@@ -28,7 +28,8 @@ def test_release_please_owns_pre_1_0_versioning_and_changelog():
     assert config["packages"]["."]["extra-files"] == [
         "src/fl_midi_batch_exporter/__init__.py"
     ]
-    assert manifest == {".": "0.3.2"}
+    assert set(manifest) == {"."}
+    assert re.fullmatch(r"0\.\d+\.\d+", manifest["."])
 
     visible_types = {
         section["type"]
