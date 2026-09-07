@@ -67,23 +67,27 @@ Older builds remain available on the [Releases](https://github.com/viy2tek/Patte
 
 ## Release automation
 
-Releases are created automatically when a bare SemVer tag is pushed:
+Release Please manages versions, tags, GitHub Releases, and `CHANGELOG.md` from
+Conventional Commit pull request titles. A push to `master` creates or updates
+one Release PR. Merging that PR creates a draft release and a `vX.Y.Z` tag.
 
-- Stable: `0.3.2`
-- Pre-release: `0.3.2-beta.1`
+The same workflow then runs lint checks and tests, builds the Windows
+executable with `build.ps1`, adds the executable and its SHA-256 checksum to the
+draft, and publishes only after both assets are present. A failed build or
+upload leaves the release as a draft that can be retried safely.
 
-Tags such as `v0.3.2` or `Pattern-Atlas 0.3.2` are rejected. The workflow
-generates customer-facing release notes from the complete diff since the
-previous tag, builds the Windows executable, and publishes a SHA-256 checksum
-beside it. The checksum verifies file integrity; it does not remove Windows
-SmartScreen warnings or establish publisher trust.
+For versions below `1.0.0`, normal features and fixes are patch releases.
+Breaking changes advance the minor version and must be requested explicitly.
+Do not edit version fields, `CHANGELOG.md`, tags, or releases manually.
 
-Repository maintainers must configure these GitHub Actions secrets:
+The workflow uses `GITHUB_TOKEN` by default. Maintainers may add a fine-grained
+`RELEASE_PLEASE_TOKEN` secret when Release Please PR checks must start without
+manual approval. GitHub Actions must be allowed to create pull requests, and
+branch protection should require **Tests** and **PR metadata** before merge.
 
-- `GEMINI_API_KEY` for `gemini-3.5-flash-lite` release-note generation.
-
-The published `.sha256` file lets users verify that their downloaded file is
-identical to the one produced by the workflow.
+Enable immutable releases in the repository settings after the first automated
+release is verified. The published `.sha256` file verifies file integrity; it
+does not remove Windows SmartScreen warnings or establish publisher trust.
 
 ## CLI
 
