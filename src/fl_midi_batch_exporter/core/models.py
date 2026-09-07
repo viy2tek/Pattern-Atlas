@@ -17,6 +17,21 @@ class SplitMode(StrEnum):
 
 
 @dataclass(frozen=True)
+class MidiInspector:
+    """Compact diagnostic facts shown after a MIDI file is analyzed."""
+
+    midi_type: int
+    track_count: int
+    musical_track_count: int
+    channel_count: int
+    note_count: int
+    tempo_bpm: float
+    ticks_per_beat: int
+    split_mode: SplitMode
+    split_reason: str
+
+
+@dataclass(frozen=True)
 class TimedMidiEvent:
     tick: int
     order: int
@@ -48,6 +63,7 @@ class MidiProjectAnalysis:
     sources: tuple[MidiSource, ...]
     total_notes: int
     source_events: Mapping[str, tuple[TimedMidiEvent, ...]] = field(default_factory=dict)
+    inspector: MidiInspector | None = None
 
     def __post_init__(self) -> None:
         """Defensively freeze the mapping supplied by callers."""

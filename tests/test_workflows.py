@@ -6,7 +6,7 @@ import pytest
 
 from fl_midi_batch_exporter.application import MidiExportService
 from fl_midi_batch_exporter.core.analyzer import analyze_midi
-from fl_midi_batch_exporter.core.models import MidiExportError, SplitMode
+from fl_midi_batch_exporter.core.models import MidiExportError, MidiInspector, SplitMode
 from fl_midi_batch_exporter.core.naming import reserve_output_path, suggest_stem_name
 from fl_midi_batch_exporter.core.reader import read_midi
 
@@ -28,6 +28,38 @@ def test_auto_uses_tracks_when_multiple_tracks_have_notes(
         (0, None),
         (1, None),
     ]
+
+
+def test_analysis_includes_compact_midi_inspector_summary(
+    midi_file: Callable[..., Path],
+) -> None:
+    path = midi_file(
+        "inspector.mid",
+        [
+            [mido.MetaMessage("set_tempo", tempo=600_000)],
+            [
+                mido.MetaMessage("track_name", name="Lead"),
+                mido.Message("note_on", channel=0, note=60, velocity=100),
+            ],
+            [
+                mido.MetaMessage("track_name", name="Layer"),
+                mido.Message("note_on", channel=1, note=48, velocity=100),
+            ],
+        ],
+    )
+
+    analysis = analyze_midi(read_midi(path))
+
+    assert isinstance(analysis.inspector, MidiInspector)
+    assert analysis.inspector.midi_type == 1
+    assert analysis.inspector.track_count == 3
+    assert analysis.inspector.musical_track_count == 2
+    assert analysis.inspector.channel_count == 2
+    assert analysis.inspector.note_count == 2
+    assert analysis.inspector.tempo_bpm == 100
+    assert analysis.inspector.ticks_per_beat == 480
+    assert analysis.inspector.split_mode is SplitMode.SMART
+    assert "single-channel tracks" in analysis.inspector.split_reason
 
 
 def test_auto_uses_channels_when_one_track_has_multiple_channels(
