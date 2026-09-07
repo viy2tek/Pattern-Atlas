@@ -146,6 +146,22 @@ def test_generated_names_are_windows_safe_and_do_not_overwrite(tmp_path: Path) -
     assert reserved.name == "01 - Lead AB (2).mid"
 
 
+def test_generated_name_replaces_generic_channel_label_with_track_context() -> None:
+    from fl_midi_batch_exporter.core.models import MidiSource
+
+    source = MidiSource("channel", 4, "Channel 1", None, 0, 2, 1, 0, 120)
+
+    assert suggest_stem_name(source, 1) == "01 - Track 05 - Ch 01.mid"
+
+
+def test_generated_name_normalizes_generic_track_label() -> None:
+    from fl_midi_batch_exporter.core.models import MidiSource
+
+    source = MidiSource("track", 2, "Track 3", None, None, 2, 1, 0, 120)
+
+    assert suggest_stem_name(source, 1) == "01 - Track 03.mid"
+
+
 def test_export_preserves_existing_stems_by_choosing_a_suffix(
     midi_file: Callable[..., Path], tmp_path: Path
 ) -> None:
