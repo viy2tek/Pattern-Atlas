@@ -1,0 +1,33 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "8ae5232df4be38bec5660ae58572b2a3b6220e39",
+  "release-type": "python",
+  "versioning": "default",
+  "include-v-in-tag": true,
+  "include-v-in-release-name": true,
+  "include-component-in-tag": false,
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "draft": true,
+  "force-tag-creation": true,
+  "changelog-sections": [
+    { "type": "feat", "section": "Added", "hidden": false },
+    { "type": "fix", "section": "Fixed", "hidden": false },
+    { "type": "perf", "section": "Performance", "hidden": false },
+    { "type": "refactor", "section": "Changed", "hidden": false },
+    { "type": "docs", "section": "Documentation", "hidden": false },
+    { "type": "build", "section": "Build", "hidden": false },
+    { "type": "ci", "section": "Continuous Integration", "hidden": false },
+    { "type": "chore", "section": "Maintenance", "hidden": false },
+    { "type": "test", "section": "Tests", "hidden": false },
+    { "type": "style", "section": "Style", "hidden": false },
+    { "type": "revert", "section": "Reverts", "hidden": false }
+  ],
+  "packages": {
+    ".": {
+      "extra-files": [
+        "src/fl_midi_batch_exporter/__init__.py"
+      ]
+    }
+  }
+}

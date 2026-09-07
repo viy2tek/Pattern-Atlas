@@ -1,0 +1,30 @@
+name: PR metadata
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate:
+    name: Conventional title and description
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate pull request metadata
+        shell: pwsh
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          $titlePattern = '^(feat|fix|perf|refactor|docs|build|ci|chore|test|style|revert)(\([a-z0-9][a-z0-9._/-]*\))?!?: .+$'
+          if ($env:PR_TITLE -cnotmatch $titlePattern) {
+              throw "Pull request title must use Conventional Commits, for example: fix(ui): correct window scaling"
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:PR_BODY) -or $env:PR_BODY.Trim().Length -lt 20) {
+              throw "Pull request description is required and must briefly explain what changed."
+          }
