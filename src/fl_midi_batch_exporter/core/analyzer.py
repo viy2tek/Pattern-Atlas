@@ -2,8 +2,16 @@
 
 from collections.abc import Iterable
 
+import mido
+
 from .metadata import is_global_event
-from .models import MidiProjectAnalysis, MidiSource, SplitMode, TimedMidiEvent
+from .models import (
+    MidiInspector,
+    MidiProjectAnalysis,
+    MidiSource,
+    SplitMode,
+    TimedMidiEvent,
+)
 from .reader import ReadMidiFile
 
 
@@ -12,13 +20,48 @@ def analyze_midi(read: ReadMidiFile, mode: SplitMode = SplitMode.AUTO) -> MidiPr
     musical_tracks = tuple(index for index, track in enumerate(read.tracks) if has_note_on(track))
     strategy = resolve_strategy(mode, musical_tracks)
     sources, source_events = detect_sources(read.tracks, strategy)
+    note_channels = {
+        event.message.channel
+        for track in read.tracks
+        for event in track
+        if is_note_on(event)
+    }
+    inspector = MidiInspector(
+        midi_type=read.midi_type,
+        track_count=len(read.tracks),
+        musical_track_count=len(musical_tracks),
+        channel_count=len(note_channels),
+        note_count=total_notes(sources),
+        tempo_bpm=_tempo_bpm(read.tracks),
+        ticks_per_beat=read.ticks_per_beat,
+        split_mode=strategy,
+        split_reason=_split_reason(strategy),
+    )
     return MidiProjectAnalysis(
         read.ticks_per_beat,
         global_events(read.tracks),
         sources,
         total_notes(sources),
         source_events,
+        inspector,
     )
+
+
+def _tempo_bpm(tracks: tuple[tuple[TimedMidiEvent, ...], ...]) -> float:
+    """Return the first declared tempo, or MIDI's standard 120 BPM default."""
+    for track in tracks:
+        for event in track:
+            if event.message.type == "set_tempo":
+                return mido.tempo2bpm(event.message.tempo)
+    return 120.0
+
+
+def _split_reason(strategy: SplitMode) -> str:
+    if strategy is SplitMode.SMART:
+        return "Smart (Hybrid) keeps single-channel tracks intact and splits mixed-channel tracks."
+    if strategy is SplitMode.TRACK:
+        return "By track exports each musical track as one source."
+    return "By MIDI channel exports each channel as a separate source."
 
 
 def has_note_on(events: Iterable[TimedMidiEvent]) -> bool:

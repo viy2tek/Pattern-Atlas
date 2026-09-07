@@ -32,6 +32,7 @@ def test_main_window_preserves_the_current_layout_contract() -> None:
     assert window.mode_selector.count() == 3
     assert window.mode_selector.itemText(0) == "Smart (Hybrid)"
     assert window.mode_selector.itemData(0) == SplitMode.SMART.value
+    assert window.inspector_label.isHidden()
 
     window.close()
     app.processEvents()
@@ -196,6 +197,36 @@ def test_main_window_previews_and_filters_sources_before_export(
     app.processEvents()
 
 
+def test_main_window_shows_midi_inspector_after_analysis(midi_file) -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(MidiExportService())
+    window._show_message = lambda *args: None
+    input_path = midi_file(
+        "inspector-ui.mid",
+        [
+            [mido.MetaMessage("set_tempo", tempo=600_000)],
+            [mido.Message("note_on", channel=0, note=60, velocity=100)],
+            [mido.Message("note_on", channel=1, note=48, velocity=100)],
+        ],
+    )
+
+    window.load_file(input_path)
+    deadline = time.monotonic() + 5
+    while window._is_busy and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+
+    assert not window.inspector_label.isHidden()
+    assert "Type 1" in window.inspector_label.text()
+    assert "3 tracks" in window.inspector_label.text()
+    assert "2 channels" in window.inspector_label.text()
+    assert "100 BPM" in window.inspector_label.text()
+    assert "Smart (Hybrid)" in window.inspector_label.text()
+
+    window.close()
+    app.processEvents()
+
+
 def test_source_preview_can_expand_and_collapse() -> None:
     app = QApplication.instance() or QApplication([])
     window = MainWindow(MidiExportService())
@@ -248,6 +279,7 @@ def test_source_clear_button_resets_loaded_midi_and_results() -> None:
     assert window.result_list.count() == 0
     assert window.source_label.text() == "No MIDI file selected"
     assert window.detected_label.text() == "Choose a file to detect MIDI sources"
+    assert window.inspector_label.isHidden()
     assert window._last_output_dir is None
     window.close()
     app.processEvents()
