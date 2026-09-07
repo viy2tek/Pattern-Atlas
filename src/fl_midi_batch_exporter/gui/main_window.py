@@ -211,6 +211,11 @@ class MainWindow(QMainWindow):
         source_title.setObjectName("sectionTitle")
         source_header.addWidget(source_title)
         source_header.addStretch()
+        self.source_clear_button = QPushButton("Clear")
+        self.source_clear_button.setObjectName("compactButton")
+        self.source_clear_button.setMinimumHeight(28)
+        self.source_clear_button.clicked.connect(self._clear_source_preview)
+        source_header.addWidget(self.source_clear_button)
         self.source_expand_button = QPushButton("Expand")
         self.source_expand_button.setObjectName("compactButton")
         self.source_expand_button.setMinimumHeight(28)
@@ -324,6 +329,10 @@ class MainWindow(QMainWindow):
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         """Accept valid MIDI drags over any part of the main window."""
+        if self._is_internal_result_drag(event):
+            self._set_drag_overlay_visible(False)
+            event.ignore()
+            return
         if DropZone.input_paths_from_event(event):
             self._set_drag_overlay_visible(True)
             event.acceptProposedAction()
@@ -332,6 +341,10 @@ class MainWindow(QMainWindow):
 
     def dragMoveEvent(self, event: QDragMoveEvent) -> None:
         """Keep the full-window drop target active while dragging."""
+        if self._is_internal_result_drag(event):
+            self._set_drag_overlay_visible(False)
+            event.ignore()
+            return
         if DropZone.input_paths_from_event(event):
             self._set_drag_overlay_visible(True)
             event.acceptProposedAction()
@@ -340,6 +353,10 @@ class MainWindow(QMainWindow):
 
     def dropEvent(self, event: QDropEvent) -> None:
         """Load MIDI files or folders dropped anywhere in the window."""
+        if self._is_internal_result_drag(event):
+            self._set_drag_overlay_visible(False)
+            event.ignore()
+            return
         paths = DropZone.input_paths_from_event(event)
         self._set_drag_overlay_visible(False)
         if not paths:
@@ -359,12 +376,23 @@ class MainWindow(QMainWindow):
             watched is self or self.isAncestorOf(watched)
         ):
             event_type = event.type()
+            if self._is_internal_result_drag(event):
+                self._set_drag_overlay_visible(False)
+                return super().eventFilter(watched, event)
             if event_type in (QEvent.Type.DragEnter, QEvent.Type.DragMove):
                 if DropZone.input_paths_from_event(event):  # type: ignore[arg-type]
                     self._set_drag_overlay_visible(True)
             elif event_type == QEvent.Type.Drop:
                 self._set_drag_overlay_visible(False)
         return super().eventFilter(watched, event)
+
+    def _is_internal_result_drag(self, event: object) -> bool:
+        """Prevent exported stems from being loaded back as new inputs."""
+        source_getter = getattr(event, "source", None)
+        source = source_getter() if callable(source_getter) else None
+        return source is self.result_list or (
+            isinstance(source, QWidget) and self.result_list.isAncestorOf(source)
+        )
 
     def _set_drag_overlay_visible(self, visible: bool) -> None:
         """Toggle and size the full-surface drag target."""
@@ -386,6 +414,23 @@ class MainWindow(QMainWindow):
         self._main_layout.setStretchFactor(self.source_card, 1 if expanded else 0)
         self._main_layout.setStretchFactor(self.result_card, 0 if expanded else 1)
         self._update_result_height()
+
+    @Slot()
+    def _clear_source_preview(self) -> None:
+        """Clear the loaded MIDI sources and their visible export results."""
+        if self._is_busy:
+            return
+        self._input_path = None
+        self._input_paths = ()
+        self._analysis = None
+        self._analyses = ()
+        self._last_output_dir = None
+        self.source_table.setRowCount(0)
+        self.result_list.clear()
+        self.source_label.setText("No MIDI file selected")
+        self.detected_label.setText("Choose a file to detect MIDI sources")
+        self.status_label.setText("Ready to export.")
+        self._update_controls()
 
     def _update_result_height(self) -> None:
         """Keep the result panel proportional to the reference viewport."""
@@ -768,6 +813,7 @@ class MainWindow(QMainWindow):
     def _update_controls(self) -> None:
         can_select_input = not self._is_busy
         self.browse_button.setEnabled(can_select_input)
+        self.source_clear_button.setEnabled(can_select_input)
         self.mode_selector.setEnabled(can_select_input)
         self.export_button.setEnabled(
             bool(self._analyses) and self._has_selected_sources() and not self._is_busy

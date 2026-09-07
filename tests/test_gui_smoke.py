@@ -1,15 +1,22 @@
 import os
 import time
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import mido
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QAbstractItemView, QApplication
 
 from fl_midi_batch_exporter.application import MidiExportService
-from fl_midi_batch_exporter.core.models import MidiExportError, SplitMode
+from fl_midi_batch_exporter.core.models import (
+    ExportedStem,
+    MidiExportError,
+    MidiSource,
+    SplitMode,
+)
 from fl_midi_batch_exporter.gui.main_window import MainWindow
+from fl_midi_batch_exporter.gui.result_list import ResultList
 
 
 def test_main_window_preserves_the_current_layout_contract() -> None:
@@ -219,6 +226,50 @@ def test_source_preview_can_expand_and_collapse() -> None:
     app.processEvents()
 
 
+def test_source_clear_button_resets_loaded_midi_and_results() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(MidiExportService())
+    window._input_path = Path("song.mid")
+    window._input_paths = (window._input_path,)
+    window.source_label.setText("song.mid")
+    window.detected_label.setText("2 MIDI sources")
+    window.source_table.setRowCount(2)
+    window.result_list.addItem("01 - Lead.mid — 1 notes")
+    window._last_output_dir = Path("stems")
+
+    assert window.source_clear_button.text() == "Clear"
+    window.source_clear_button.click()
+
+    assert window._input_path is None
+    assert window._input_paths == ()
+    assert window._analysis is None
+    assert window._analyses == ()
+    assert window.source_table.rowCount() == 0
+    assert window.result_list.count() == 0
+    assert window.source_label.text() == "No MIDI file selected"
+    assert window.detected_label.text() == "Choose a file to detect MIDI sources"
+    assert window._last_output_dir is None
+    window.close()
+    app.processEvents()
+
+
+def test_exported_file_drag_is_not_accepted_as_new_input() -> None:
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(MidiExportService())
+
+    class DragEvent:
+        def __init__(self, source: object) -> None:
+            self._source = source
+
+        def source(self) -> object:
+            return self._source
+
+    assert window._is_internal_result_drag(DragEvent(window.result_list)) is True
+    assert window._is_internal_result_drag(DragEvent(None)) is False
+    window.close()
+    app.processEvents()
+
+
 def test_exported_files_card_stays_inside_the_content_surface() -> None:
     app = QApplication.instance() or QApplication([])
     window = MainWindow(MidiExportService())
@@ -228,4 +279,34 @@ def test_exported_files_card_stays_inside_the_content_surface() -> None:
     assert window.result_card.geometry().bottom() <= window._content_surface.rect().bottom()
 
     window.close()
+    app.processEvents()
+
+
+def test_result_list_exposes_exported_files_as_dragged_file_urls(tmp_path) -> None:
+    app = QApplication.instance() or QApplication([])
+    result_list = ResultList()
+    first_path = tmp_path / "01 - Lead.mid"
+    second_path = tmp_path / "02 - Bass.mid"
+    source = MidiSource("t0", 0, "Lead", None, None, 2, 1, 0, 120)
+
+    result_list.add_exported_stem(
+        ExportedStem(first_path, source, event_count=2, note_count=1)
+    )
+    result_list.add_exported_stem(
+        ExportedStem(second_path, source, event_count=2, note_count=1)
+    )
+
+    assert result_list.dragEnabled() is True
+    assert result_list.dragDropMode() is QAbstractItemView.DragDropMode.DragOnly
+    assert result_list.item(0).data(Qt.ItemDataRole.UserRole) == str(first_path)
+
+    result_list.item(0).setSelected(True)
+    result_list.item(1).setSelected(True)
+    mime_data = result_list.mimeData(result_list.selectedItems())
+
+    assert [Path(url.toLocalFile()) for url in mime_data.urls()] == [
+        first_path,
+        second_path,
+    ]
+    result_list.deleteLater()
     app.processEvents()

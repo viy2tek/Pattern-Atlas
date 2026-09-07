@@ -1,7 +1,14 @@
-"""Widget for displaying exported MIDI stems."""
+"""Widget for displaying and dragging exported MIDI stems."""
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QListWidget
+from pathlib import Path
+
+from PySide6.QtCore import QMimeData, Qt, QUrl
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+)
 
 from ..core.models import ExportedStem, ExportResult, MidiBatchResult
 from .icons import IconLabel
@@ -13,6 +20,11 @@ class ResultList(QListWidget):
     def __init__(self, parent: object | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("resultList")
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        self.setDragEnabled(True)
+        self.setDefaultDropAction(Qt.DropAction.CopyAction)
+        self.setToolTip("Drag exported MIDI files into your DAW")
         self.empty_icon = IconLabel("file", "#c3c9d4", 34, self)
         self.empty_state = QLabel("No files exported yet.", self)
         self.empty_state.setObjectName("mutedText")
@@ -35,8 +47,25 @@ class ResultList(QListWidget):
 
     def add_exported_stem(self, stem: ExportedStem) -> None:
         """Append one committed stem to the visible export list."""
-        self.addItem(f"{stem.path.name} — {stem.note_count} notes")
+        item = QListWidgetItem(f"{stem.path.name} — {stem.note_count} notes")
+        item.setData(Qt.ItemDataRole.UserRole, str(stem.path))
+        item.setToolTip("Drag this MIDI file into your DAW")
+        self.addItem(item)
         self._update_empty_state()
+
+    def mimeData(self, items: list[QListWidgetItem]) -> QMimeData:
+        """Expose selected exported paths as native file URLs."""
+        mime_data = QMimeData()
+        urls = []
+        for item in items:
+            raw_path = item.data(Qt.ItemDataRole.UserRole)
+            if not raw_path:
+                continue
+            urls.append(QUrl.fromLocalFile(str(Path(str(raw_path)))))
+        mime_data.setUrls(urls)
+        if urls:
+            mime_data.setText("\n".join(url.toLocalFile() for url in urls))
+        return mime_data
 
     def _update_empty_state(self) -> None:
         empty = self.count() == 0
