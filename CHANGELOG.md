@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.8](https://github.com/viy2tek/Pattern-Atlas/compare/v0.3.7...v0.3.8) (2026-09-08)
+
+
+### Added
+
+* add automation outputs to CLI ([f716d0f](https://github.com/viy2tek/Pattern-Atlas/commit/f716d0f269bab1156b745117a3aeebd833be09d3))
+* add automation outputs to CLI ([9e7ca0f](https://github.com/viy2tek/Pattern-Atlas/commit/9e7ca0fde8e1c9b014d89d9d8baac53b883fdf13))
+
 ## [0.3.7](https://github.com/viy2tek/Pattern-Atlas/compare/v0.3.6...v0.3.7) (2026-09-08)
 
 
