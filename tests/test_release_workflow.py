@@ -20,7 +20,7 @@ def test_release_please_owns_pre_1_0_versioning_and_changelog():
 
     assert config["release-type"] == "python"
     assert config["bump-minor-pre-major"] is True
-    assert config["bump-patch-for-minor-pre-major"] is True
+    assert config["bump-patch-for-minor-pre-major"] is False
     assert config["include-v-in-tag"] is True
     assert config["include-component-in-tag"] is False
     assert config["draft"] is True
