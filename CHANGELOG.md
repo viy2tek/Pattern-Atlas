@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.7](https://github.com/viy2tek/Pattern-Atlas/compare/v0.3.6...v0.3.7) (2026-09-08)
+
+
+### Documentation
+
+* remove release automation details from README ([e58569d](https://github.com/viy2tek/Pattern-Atlas/commit/e58569d798d7487f7da9ff7632f92dc76bb677c0))
+* remove release automation details from README ([adaf64a](https://github.com/viy2tek/Pattern-Atlas/commit/adaf64a3eb2858a20e8907683d77ca23663a7227))
+
 ## [0.3.6](https://github.com/viy2tek/Pattern-Atlas/compare/v0.3.5...v0.3.6) (2026-09-08)
 
 
