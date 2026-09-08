@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.9](https://github.com/viy2tek/Pattern-Atlas/compare/v0.3.8...v0.3.9) (2026-09-08)
+
+
+### Fixed
+
+* use minor bumps for pre-1.0 features ([8d996a5](https://github.com/viy2tek/Pattern-Atlas/commit/8d996a5b62917185329b61953da02d12a31258be))
+* use minor bumps for pre-1.0 features ([09c9b27](https://github.com/viy2tek/Pattern-Atlas/commit/09c9b27f9edbec1d320ecc55ccecf30f23681586))
+
 ## [0.3.8](https://github.com/viy2tek/Pattern-Atlas/compare/v0.3.7...v0.3.8) (2026-09-08)
 
 
