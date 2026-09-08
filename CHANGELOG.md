@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.5](https://github.com/viy2tek/Pattern-Atlas/compare/v0.3.4...v0.3.5) (2026-09-07)
+
+
+### Documentation
+
+* refresh README interface screenshot ([ccb7502](https://github.com/viy2tek/Pattern-Atlas/commit/ccb75021e676bf57168fc6804854f54ce86d491c))
+* refresh README interface screenshot ([0bdf558](https://github.com/viy2tek/Pattern-Atlas/commit/0bdf558f3e74931291a4f129abdc5a507dfe5c42))
+
 ## [0.3.4](https://github.com/viy2tek/Pattern-Atlas/compare/v0.3.3...v0.3.4) (2026-09-07)
 
 
