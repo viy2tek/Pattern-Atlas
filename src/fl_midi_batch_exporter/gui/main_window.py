@@ -42,6 +42,7 @@ from ..core.models import (
     ExportResult,
     MidiBatchResult,
     MidiExportError,
+    MidiInspector,
     MidiProjectAnalysis,
     MidiSource,
     MidiSourceSelection,
@@ -222,6 +223,11 @@ class MainWindow(QMainWindow):
         self.source_expand_button.clicked.connect(self._toggle_source_preview)
         source_header.addWidget(self.source_expand_button)
         source_card_layout.addLayout(source_header)
+        self.inspector_label = QLabel()
+        self.inspector_label.setObjectName("mutedText")
+        self.inspector_label.setWordWrap(True)
+        self.inspector_label.hide()
+        source_card_layout.addWidget(self.inspector_label)
         self.source_table = QTableWidget(0, 7)
         self.source_table.setObjectName("sourceTable")
         self.source_table.setHorizontalHeaderLabels(
@@ -429,6 +435,8 @@ class MainWindow(QMainWindow):
         self.result_list.clear()
         self.source_label.setText("No MIDI file selected")
         self.detected_label.setText("Choose a file to detect MIDI sources")
+        self.inspector_label.clear()
+        self.inspector_label.hide()
         self.status_label.setText("Ready to export.")
         self._update_controls()
 
@@ -615,6 +623,8 @@ class MainWindow(QMainWindow):
         self.output_dir_input.setText(str(self._default_output_directory(requested)))
         self.result_list.clear()
         self.source_table.setRowCount(0)
+        self.inspector_label.clear()
+        self.inspector_label.hide()
         self._update_controls()
 
         mode = self._selected_mode()
@@ -728,6 +738,7 @@ class MainWindow(QMainWindow):
         else:
             self.source_label.setText(f"{len(analyses)} MIDI files selected")
         self.detected_label.setText(f"{source_count} MIDI sources")
+        self._update_inspector(analyses)
         self._populate_source_table(analyses)
         self.status_label.setText("Ready to export.")
         self._update_controls()
@@ -800,6 +811,8 @@ class MainWindow(QMainWindow):
             self._analysis = None
             self._analyses = ()
             self.source_table.setRowCount(0)
+            self.inspector_label.clear()
+            self.inspector_label.hide()
         self.status_label.setText("Could not finish operation.")
         self._show_message("Could not finish operation", message, QMessageBox.Icon.Critical)
 
@@ -821,6 +834,70 @@ class MainWindow(QMainWindow):
         self.open_folder_button.setEnabled(
             self._last_output_dir is not None and not self._is_busy
         )
+
+    def _update_inspector(
+        self, analyses: tuple[tuple[Path, MidiProjectAnalysis], ...]
+    ) -> None:
+        """Render the compact diagnostic summary for the current selection."""
+        inspections = [
+            analysis.inspector
+            for _, analysis in analyses
+            if analysis.inspector is not None
+        ]
+        if not inspections:
+            self.inspector_label.clear()
+            self.inspector_label.hide()
+            return
+
+        if len(inspections) == 1:
+            inspection = inspections[0]
+            summary = self._format_inspector_summary(inspection)
+            reason = inspection.split_reason
+        else:
+            summary = self._format_batch_inspector_summary(inspections)
+            reason = inspections[0].split_reason
+        self.inspector_label.setText(f"Inspector: {summary}\nSplit: {reason}")
+        self.inspector_label.show()
+
+    @staticmethod
+    def _format_inspector_summary(inspection: MidiInspector) -> str:
+        """Format one file's diagnostic facts for the compact UI line."""
+        tempo = MainWindow._format_bpm(inspection.tempo_bpm)
+        return (
+            f"Type {inspection.midi_type} · "
+            f"{MainWindow._count_label(inspection.track_count, 'track')} · "
+            f"{MainWindow._count_label(inspection.musical_track_count, 'musical track')} · "
+            f"{MainWindow._count_label(inspection.channel_count, 'channel')} · "
+            f"{MainWindow._count_label(inspection.note_count, 'note')} · "
+            f"{tempo} BPM · {inspection.ticks_per_beat} PPQ"
+        )
+
+    @staticmethod
+    def _format_batch_inspector_summary(inspections: list[MidiInspector]) -> str:
+        """Format aggregate diagnostic facts for a multi-file selection."""
+        def aggregate(attribute: str) -> int:
+            return sum(getattr(item, attribute) for item in inspections)
+
+        tempos = {MainWindow._format_bpm(item.tempo_bpm) for item in inspections}
+        ppqs = {item.ticks_per_beat for item in inspections}
+        tempo = next(iter(tempos)) if len(tempos) == 1 else "mixed"
+        ppq = str(next(iter(ppqs))) if len(ppqs) == 1 else "mixed"
+        return (
+            f"{len(inspections)} MIDI files · "
+            f"{MainWindow._count_label(aggregate('track_count'), 'track')} · "
+            f"{MainWindow._count_label(aggregate('musical_track_count'), 'musical track')} · "
+            f"{MainWindow._count_label(aggregate('channel_count'), 'channel')} · "
+            f"{MainWindow._count_label(aggregate('note_count'), 'note')} · "
+            f"{tempo} BPM · {ppq} PPQ"
+        )
+
+    @staticmethod
+    def _count_label(count: int, singular: str) -> str:
+        return f"{count} {singular if count == 1 else singular + 's'}"
+
+    @staticmethod
+    def _format_bpm(tempo_bpm: float) -> str:
+        return str(int(tempo_bpm)) if tempo_bpm.is_integer() else f"{tempo_bpm:.1f}"
 
     def _selected_mode(self) -> SplitMode:
         mode = self.mode_selector.currentData()
