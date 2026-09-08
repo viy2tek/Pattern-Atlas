@@ -71,7 +71,13 @@ Older builds remain available on the [Releases](https://github.com/viy2tek/Patte
 midi-exporter song.mid -o output --mode smart
 midi-exporter song-01.mid song-02.mid -o output --mode smart
 midi-exporter .\midi-folder -o output --mode smart
+midi-exporter song.mid --analyze
+midi-exporter song.mid --analyze --json
+midi-exporter .\midi-folder -o output --mode smart --json
 ```
+
+Use `--analyze` to inspect MIDI metadata and detected sources without creating
+files. Add `--json` whenever another script needs structured input and output.
 
 ## Development
 
