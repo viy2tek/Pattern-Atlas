@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.6](https://github.com/viy2tek/Pattern-Atlas/compare/v0.3.5...v0.3.6) (2026-09-08)
+
+
+### Added
+
+* add MIDI inspector diagnostics ([4a501f0](https://github.com/viy2tek/Pattern-Atlas/commit/4a501f08f45a4c43b5f50e9acbf68479912c693e))
+
 ## [0.3.5](https://github.com/viy2tek/Pattern-Atlas/compare/v0.3.4...v0.3.5) (2026-09-07)
 
 
